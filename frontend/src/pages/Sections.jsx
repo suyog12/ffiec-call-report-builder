@@ -11,9 +11,20 @@ const SCHEDULE_COLORS = {
 const DEFAULT_COLOR = "#64748b";
 
 const CARD_ACCENTS = [
-  "#2563eb","#059669","#7c3aed","#b45309",
-  "#0891b2","#be185d","#374151","#0d9488",
-  "#6d28d9","#047857","#9f1239","#1d4ed8","#92400e",
+  // Muted, desaturated professional palette — colorblind-safe
+  "#1d4ed8",  // steel blue
+  "#065f46",  // deep forest green
+  "#4c1d95",  // deep violet
+  "#78350f",  // dark amber
+  "#164e63",  // deep teal
+  "#831843",  // deep rose
+  "#374151",  // slate
+  "#134e4a",  // dark emerald
+  "#312e81",  // indigo
+  "#064e3b",  // dark green
+  "#881337",  // dark crimson
+  "#1e3a8a",  // royal blue
+  "#451a03",  // dark brown
 ];
 
 function BankLogo({ bankName, size = 22 }) {

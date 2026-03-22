@@ -5,17 +5,102 @@ import { fetchAllFields } from "../services/api";
 const STEPS = ["Schedules", "Fields", "Banks", "Preview"];
 
 const CARD_ACCENTS = [
-  "#2563eb","#059669","#7c3aed","#b45309",
-  "#0891b2","#be185d","#374151","#0d9488",
-  "#6d28d9","#047857","#9f1239","#1d4ed8","#92400e",
+  // Muted, desaturated professional palette — colorblind-safe
+  "#1d4ed8",  // steel blue
+  "#065f46",  // deep forest green
+  "#4c1d95",  // deep violet
+  "#78350f",  // dark amber
+  "#164e63",  // deep teal
+  "#831843",  // deep rose
+  "#374151",  // slate
+  "#134e4a",  // dark emerald
+  "#312e81",  // indigo
+  "#064e3b",  // dark green
+  "#881337",  // dark crimson
+  "#1e3a8a",  // royal blue
+  "#451a03",  // dark brown
 ];
 
 const SCHEDULE_COLORS = {
-  RC:"#2563eb", RI:"#059669", "RC-C":"#7c3aed", RIA:"#b45309",
-  RIE:"#0891b2", RIBII:"#be185d", RIC:"#374151", ENT:"#0d9488",
-  SU:"#6d28d9", NARR:"#047857", CI:"#9f1239", RID:"#1d4ed8",
-  RIBI:"#92400e", RIB:"#059669",
+  RC:"#1d4ed8", RI:"#065f46", "RC-C":"#4c1d95", RIA:"#78350f",
+  RIE:"#164e63", RIBII:"#831843", RIC:"#374151", ENT:"#134e4a",
+  SU:"#312e81", NARR:"#064e3b", CI:"#881337", RID:"#1e3a8a",
+  RIBI:"#451a03", RIB:"#065f46",
 };
+
+// ─── W&M themed animated buttons ─────────────────────────────
+function WMButton({ children, onClick, disabled, variant = "next" }) {
+  const [hovered, setHovered] = React.useState(false);
+
+  const isBack  = variant === "back";
+  const isGhost = variant === "ghost";
+  const isNext  = variant === "next";
+
+  const base = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 40,
+    minWidth: isGhost ? "auto" : 120,
+    padding: isGhost ? "0 16px" : "0 22px",
+    borderRadius: 7,
+    fontSize: 13,
+    fontWeight: 700,
+    letterSpacing: "0.4px",
+    cursor: disabled ? "not-allowed" : "pointer",
+    // All variants have a visible border so they unmistakably look like buttons
+    border: isNext
+      ? "2px solid #0d4232"
+      : isBack
+      ? "2px solid #c5d8ce"
+      : "2px solid #c5d8ce",
+    transition: "all 0.2s ease",
+    opacity: disabled ? 0.4 : 1,
+    transform: hovered && !disabled ? "translateY(-2px)" : "translateY(0)",
+    boxShadow: hovered && !disabled
+      ? isNext
+        ? "0 6px 20px rgba(17,87,64,0.35)"
+        : "0 4px 14px rgba(17,87,64,0.12)"
+      : isNext
+        ? "0 2px 6px rgba(17,87,64,0.2)"
+        : "0 1px 3px rgba(0,0,0,0.08)",
+    background: isNext
+      ? hovered && !disabled ? "#0d4232" : "#115740"
+      : isGhost
+      ? hovered && !disabled ? "#eef5f0" : "#f4f6f0"
+      : hovered && !disabled ? "#eef5f0" : "#fff",
+    color: isNext ? "#fff" : "#1a5c35",
+  };
+
+  const ArrowLeft = () => (
+    <svg height="14" width="14" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"
+      style={{ transition:"transform 0.3s ease", transform: hovered&&!disabled?"translateX(-4px)":"translateX(0)", flexShrink:0 }}>
+      <path fill="currentColor" d="M874.690416 495.52477c0 11.2973-9.168824 20.466124-20.466124 20.466124l-604.773963 0 188.083679 188.083679c7.992021 7.992021 7.992021 20.947078 0 28.939099-4.001127 3.990894-9.240455 5.996574-14.46955 5.996574-5.239328 0-10.478655-1.995447-14.479783-5.996574l-223.00912-223.00912c-3.837398-3.837398-5.996574-9.046027-5.996574-14.46955 0-5.433756 2.159176-10.632151 5.996574-14.46955l223.019353-223.029586c7.992021-7.992021 20.957311-7.992021 28.949332 0 7.992021 8.002254 7.992021 20.957311 0 28.949332l-188.073446 188.073446 604.753497 0C865.521592 475.058646 874.690416 484.217237 874.690416 495.52477z"/>
+    </svg>
+  );
+
+  const ArrowRight = () => (
+    <svg height="14" width="14" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"
+      style={{ transition:"transform 0.3s ease", transform: hovered&&!disabled?"translateX(4px)":"translateX(0)", flexShrink:0 }}>
+      <path fill="currentColor" d="M149.309584 495.52477c0-11.2973 9.168824-20.466124 20.466124-20.466124l604.773963 0-188.083679-188.083679c-7.992021-7.992021-7.992021-20.947078 0-28.939099 4.001127-3.990894 9.240455-5.996574 14.46955-5.996574 5.239328 0 10.478655 1.995447 14.479783 5.996574l223.00912 223.00912c3.837398 3.837398 5.996574 9.046027 5.996574 14.46955 0 5.433756-2.159176 10.632151-5.996574 14.46955l-223.019353 223.029586c-7.992021 7.992021-20.957311 7.992021-28.949332 0-7.992021-8.002254-7.992021-20.957311 0-28.949332l188.073446-188.073446-604.753497 0C158.478408 515.991124 149.309584 506.832763 149.309584 495.52477z"/>
+    </svg>
+  );
+
+  return (
+    <button
+      onClick={!disabled ? onClick : undefined}
+      disabled={disabled}
+      style={base}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {isBack && <ArrowLeft />}
+      <span>{children}</span>
+      {isNext && <ArrowRight />}
+    </button>
+  );
+}
 
 // ─── SyncScrollTable: styled top rail + hidden bottom scrollbar ──
 // The top rail sits inside the card header so it looks designed, not bolted on.
@@ -117,7 +202,7 @@ function StepBar({ steps, current, onBack, onNext, nextDisabled, nextLabel, isPr
   }, []);
 
   return (
-    <div style={{ position:"sticky", top:0, zIndex:20, background:"#fff", borderBottom:"1px solid #e2e8f0", marginLeft:-28, marginRight:-28, padding:"0 28px 12px", marginBottom:24 }}>
+    <div style={{ position:"sticky", top:0, zIndex:20, background:"#fafbf8", borderBottom:"1px solid #e4e9e2", marginLeft:-28, marginRight:-28, padding:"0 28px 12px", marginBottom:24 }}>
       {/* Progress */}
       <div style={{ display:"flex", alignItems:"center", paddingTop:16, paddingBottom:10 }}>
         {steps.map((s, i) => {
@@ -125,12 +210,12 @@ function StepBar({ steps, current, onBack, onNext, nextDisabled, nextLabel, isPr
           return (
             <div key={s} style={{ display:"flex", alignItems:"center", flex: i < steps.length-1 ? 1 : "none" }}>
               <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-                <div style={{ width:26, height:26, borderRadius:"50%", background: done?"#059669":active?"#2563eb":"#e5e7eb", color: done||active?"#fff":"#9ca3af", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700 }}>
+                <div style={{ width:26, height:26, borderRadius:"50%", background: done?"#115740":active?"#1d4ed8":"#e8ede9", color: done||active?"#fff":"#9ca3af", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700 }}>
                   {done ? "✓" : i+1}
                 </div>
-                <span style={{ fontSize:10, fontWeight:active?700:400, color:active?"#0f172a":done?"#374151":"#9ca3af", whiteSpace:"nowrap" }}>{s}</span>
+                <span style={{ fontSize:10, fontWeight:active?700:400, color:active?"#1a2e20":done?"#2d5240":"#94a3b8", whiteSpace:"nowrap" }}>{s}</span>
               </div>
-              {i < steps.length-1 && <div style={{ flex:1, height:2, background:done?"#059669":"#e2e8f0", margin:"0 6px", marginBottom:14 }} />}
+              {i < steps.length-1 && <div style={{ flex:1, height:2, background:done?"#115740":"#dde8e2", margin:"0 6px", marginBottom:14 }} />}
             </div>
           );
         })}
@@ -138,20 +223,20 @@ function StepBar({ steps, current, onBack, onNext, nextDisabled, nextLabel, isPr
       {/* Nav */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div style={{ display:"flex", gap:8 }}>
-          {current > 0 && !isPreview && <button className="btn btn-ghost" onClick={onBack}>← Back</button>}
+          {current > 0 && !isPreview && <WMButton variant="back" onClick={onBack}>Back</WMButton>}
           {isPreview && <>
-            <button className="btn btn-ghost" onClick={onBack}>← Back</button>
-            <button className="btn btn-ghost" onClick={onRestart}>↺ Start Over</button>
+            <WMButton variant="back" onClick={onBack}>Back</WMButton>
+            <WMButton variant="ghost" onClick={onRestart}>↺ Start Over</WMButton>
           </>}
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
           {!isPreview && <>
-            {nextLabel && <span style={{ fontSize:12, color:"#64748b" }}>{nextLabel}</span>}
-            <button className="btn btn-primary" onClick={onNext} disabled={nextDisabled} style={{ opacity:nextDisabled?0.5:1, cursor:nextDisabled?"not-allowed":"pointer" }}>Next →</button>
+            {nextLabel && <span style={{ fontSize:12, color:"#5a7a68", fontWeight:500 }}>{nextLabel}</span>}
+            <WMButton variant="next" onClick={onNext} disabled={nextDisabled}>Next</WMButton>
           </>}
           {isPreview && (
             <div className="actions-dropdown" ref={actionsRef}>
-              <button className="btn btn-primary" onClick={() => setActionsOpen(o=>!o)}>Actions ▾</button>
+              <WMButton variant="next" onClick={() => setActionsOpen(o=>!o)}>Actions ▾</WMButton>
               {actionsOpen && (
                 <div className="actions-menu">
                   <button className="actions-menu-item" onClick={() => { exportRef?.current?._csv?.(); setActionsOpen(false); }}><span>⬇</span> Export CSV</button>
@@ -195,7 +280,7 @@ function StepSections({ availableSections, selectedSections, onToggle }) {
 
   if (availableSections.length === 0) {
     return (
-      <StepCard title="Select Schedules" subtitle="No schedules found. Make sure reports are loaded." accent="#2563eb">
+      <StepCard title="Select Schedules" subtitle="No schedules found. Make sure reports are loaded." accent="#1d4ed8">
         <div style={{ textAlign:"center", color:"#94a3b8", fontSize:13, padding:"20px 0" }}>
           No schedules available — ensure a bank and period are loaded first.
         </div>
@@ -207,7 +292,7 @@ function StepSections({ availableSections, selectedSections, onToggle }) {
     <StepCard
       title="Select Schedules"
       subtitle={availableSections.length + " schedules available from the FFIEC filing — choose which to include."}
-      accent="#2563eb"
+      accent="#1d4ed8"
     >
       {Object.entries(grouped).map(([group, sections]) => {
         if (!sections.length) return null;
@@ -221,9 +306,10 @@ function StepSections({ availableSections, selectedSections, onToggle }) {
                 return (
                   <button key={s} onClick={() => onToggle(s)} style={{
                     padding:"7px 16px", borderRadius:8, fontSize:12, fontWeight:sel?700:500, cursor:"pointer",
-                    border: sel ? `2px solid ${col}` : "2px solid #e2e8f0",
-                    background: sel ? col+"12" : "#f8fafc",
-                    color: sel ? col : "#374151",
+                    border: sel ? `2px solid ${col}` : "2px solid #c5d8ce",
+                    background: sel ? col : "#fff",
+                    color: sel ? "#fff" : "#2d5240",
+                    boxShadow: sel ? "0 2px 8px "+col+"50" : "0 1px 3px rgba(0,0,0,0.08)",
                     transition:"all 0.15s",
                   }}>
                     {s}
@@ -235,7 +321,7 @@ function StepSections({ availableSections, selectedSections, onToggle }) {
         );
       })}
       {selectedSections.length > 0 && (
-        <div style={{ marginTop:4, padding:"10px 14px", background:"#f0fdf4", border:"1px solid #86efac", borderRadius:8, fontSize:12, color:"#166534" }}>
+        <div style={{ marginTop:4, padding:"10px 14px", background:"#eef5f0", border:"1px solid #a8d4bc", borderRadius:8, fontSize:12, color:"#1a5c35" }}>
           {selectedSections.length} schedule{selectedSections.length>1?"s":""} selected: {selectedSections.join(", ")}
         </div>
       )}
@@ -260,7 +346,7 @@ function StepFields({ catalogSections, selectedFieldIds, onToggleField, onToggle
   }, [catalogSections, search]);
 
   return (
-    <StepCard title="Select Fields" subtitle={`Pick individual fields. ${selectedFieldIds.size > 0 ? selectedFieldIds.size+" selected" : "All will be fetched for every bank and period."}`} accent="#2563eb">
+    <StepCard title="Select Fields" subtitle={`Pick individual fields. ${selectedFieldIds.size > 0 ? selectedFieldIds.size+" selected" : "All will be fetched for every bank and period."}`} accent="#1d4ed8">
       {/* Search */}
       <div style={{ position:"relative", marginBottom:16 }}>
         <span style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", fontSize:13, color:"#94a3b8", pointerEvents:"none" }}>⌕</span>
@@ -371,7 +457,7 @@ function StepBanks({ banks, selectedBankIds, allCatalogs, selectedFieldIds, bank
               <strong>Not found in this filing:</strong> {st.missing.join(", ")}
             </div>
           ) : (
-            <div style={{ padding:"10px 14px", background:"#f0fdf4", border:"1px solid #86efac", borderRadius:8, fontSize:12, color:"#166534" }}>
+            <div style={{ padding:"10px 14px", background:"#eef5f0", border:"1px solid #a8d4bc", borderRadius:8, fontSize:12, color:"#1a5c35" }}>
               All {selectedFieldIds.size} selected fields are present in this bank's filing.
             </div>
           )}
@@ -381,7 +467,7 @@ function StepBanks({ banks, selectedBankIds, allCatalogs, selectedFieldIds, bank
   }
 
   return (
-    <StepCard title="Field Matching" subtitle={`${selectedFieldIds.size} fields will be applied to all banks. Missing fields show as —.`} accent="#2563eb">
+    <StepCard title="Field Matching" subtitle={`${selectedFieldIds.size} fields will be applied to all banks. Missing fields show as —.`} accent="#1d4ed8">
       {selectedBankIds.map((rssdId, bi) => {
         const bank  = banks[rssdId];
         const st    = bankStatus[rssdId] || {};
@@ -400,7 +486,7 @@ function StepBanks({ banks, selectedBankIds, allCatalogs, selectedFieldIds, bank
               </div>
               {st.missing?.length > 0
                 ? <span style={{ fontSize:11, background:"#fffbeb", color:"#92400e", border:"1px solid #fcd34d", padding:"2px 9px", borderRadius:99 }}>⚠ {st.missing.length} missing</span>
-                : <span style={{ fontSize:11, background:"#f0fdf4", color:"#166534", border:"1px solid #86efac", padding:"2px 9px", borderRadius:99 }}>✓ All found</span>}
+                : <span style={{ fontSize:11, background:"#f0fdf4", color:"#1a5c35", border:"1px solid #86efac", padding:"2px 9px", borderRadius:99 }}>✓ All found</span>}
               <span style={{ fontSize:10, color:"#94a3b8" }}>{isOpen?"▲":"▼"}</span>
             </div>
             {isOpen && (
@@ -495,7 +581,7 @@ function StepPreview({ allCatalogs, selectedBankIds, selectedPeriods, selectedFi
     <div>
       {/* Summary card */}
       <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,0.05)", marginBottom:16 }}>
-        <div style={{ background:"#2563eb", padding:"16px 20px", display:"flex", alignItems:"center", gap:20 }}>
+        <div style={{ background:"#1d4ed8", padding:"16px 20px", display:"flex", alignItems:"center", gap:20 }}>
           <div>
             <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", textTransform:"uppercase", letterSpacing:0.8 }}>Banks</div>
             <div style={{ fontSize:22, fontWeight:800, color:"#fff" }}>{selectedBankIds.length}</div>
@@ -674,9 +760,15 @@ export default function CustomReport({ selectedBanks, selectedPeriods, banksById
     return {...prev, [rssdId]:cur};
   });
 
-  // Load catalog immediately on mount so Step 1 shows real sections from the API
+  // Load catalog on mount or when bank/period combo changes.
+  // catalogLoaded persists in component state — if the combo hasn't changed,
+  // we skip the fetch. Since React re-mounts this component on tab switch,
+  // we track the loaded combo in a ref to avoid redundant fetches.
+  const loadedComboRef = React.useRef("");
   React.useEffect(() => {
-    if (bankIds.length > 0 && periods.length > 0 && !catalogLoaded) {
+    const combo = bankIds.join(",") + "|" + periods.join(",");
+    if (bankIds.length > 0 && periods.length > 0 && loadedComboRef.current !== combo) {
+      loadedComboRef.current = combo;
       loadCatalogs();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -698,8 +790,8 @@ export default function CustomReport({ selectedBanks, selectedPeriods, banksById
   return (
     <div style={{ width:"100%" }}>
       <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:18, fontWeight:800, color:"#0f172a", letterSpacing:"-0.5px" }}>Custom Report Builder</div>
-        <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>
+        <div style={{ fontSize:18, fontWeight:800, color:"#1a2e20", letterSpacing:"-0.5px" }}>Custom Report Builder</div>
+        <div style={{ fontSize:12, color:"#5a7a68", marginTop:2 }}>
           {bankIds.length} bank{bankIds.length>1?"s":""} · {periods.length} period{periods.length>1?"s":""}
           {periods.length>1 && " · Pivoted comparison view"}
         </div>
@@ -719,7 +811,7 @@ export default function CustomReport({ selectedBanks, selectedPeriods, banksById
       {step===0 && (
         loadingCatalog ? (
           <div style={{ padding:"40px 0", textAlign:"center", color:"#94a3b8", fontSize:14 }}>
-            <div style={{ width:24, height:24, border:"2.5px solid #e2e8f0", borderTopColor:"#2563eb", borderRadius:"50%", animation:"spin 0.7s linear infinite", margin:"0 auto 12px" }} />
+            <div style={{ width:24, height:24, border:"2.5px solid #e2e8f0", borderTopColor:"#115740", borderRadius:"50%", animation:"spin 0.7s linear infinite", margin:"0 auto 12px" }} />
             Loading schedules from FFIEC API…
           </div>
         ) : (
