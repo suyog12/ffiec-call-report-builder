@@ -1,19 +1,17 @@
 const CARD_ACCENTS = [
-  // Colorblind-safe, professional financial palette
-  // Distinguishable under deuteranopia, protanopia, and tritanopia
-  "#2563eb",  // blue
-  "#059669",  // forest green
-  "#7c3aed",  // muted purple
-  "#b45309",  // warm amber
-  "#0891b2",  // teal
-  "#be185d",  // deep rose
+  "#1d4ed8",  // steel blue
+  "#065f46",  // deep forest green
+  "#4c1d95",  // deep violet
+  "#78350f",  // dark amber
+  "#164e63",  // deep teal
+  "#831843",  // deep rose
   "#374151",  // slate
-  "#0d9488",  // dark teal
-  "#6d28d9",  // indigo
-  "#047857",  // emerald
-  "#9f1239",  // dark rose
-  "#1d4ed8",  // royal blue
-  "#92400e",  // dark amber
+  "#134e4a",  // dark emerald
+  "#312e81",  // indigo
+  "#064e3b",  // dark green
+  "#881337",  // dark crimson
+  "#1e3a8a",  // royal blue
+  "#451a03",  // dark brown
 ];
 
 function fmtNum(v) { if (v === null || v === undefined) return "—"; return v.toLocaleString("en-US", { maximumFractionDigits: 0 }); }

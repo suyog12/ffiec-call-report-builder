@@ -340,52 +340,21 @@ export default function App() {
       ? selectedPeriods[0]
       : selectedPeriods.length + " periods";
 
-  // ── Render ────────────────────────────────────────────────
-  const renderPage = () => {
-    if (activeTab === "Custom") {
-      return (
-        <CustomReport
-          selectedBanks={selectedBanks}
-          selectedPeriods={selectedPeriods}
-          banksById={banksById}
-        />
-      );
-    }
+  // ── Persistent tab rendering ─────────────────────────────
+  // All tabs stay mounted (never unmount) — switching just toggles display:none.
+  // This preserves all state: PDF loaded, Custom wizard step, Sections expanded, etc.
+  const emptyState = (
+    <div style={{ padding: "60px 0", textAlign: "center", color: "#94a3b8" }}>
+      <div style={{ fontSize: 32, marginBottom: 12, fontWeight: 300 }}>◈</div>
+      <p style={{ fontSize: 14 }}>
+        Select a bank and period, then click <strong style={{ color: "#1a2e20" }}>Load Report</strong>.
+      </p>
+    </div>
+  );
 
-    if (loadedReports.length === 0) {
-      return (
-        <div style={{ padding: "60px 0", textAlign: "center", color: "#94a3b8" }}>
-          <div style={{ fontSize: 32, marginBottom: 12, fontWeight: 300 }}>◈</div>
-          <p style={{ fontSize: 14 }}>
-            Select a bank and period, then click <strong style={{ color: "#0f172a" }}>Load Report</strong>.
-          </p>
-        </div>
-      );
-    }
-
-    if (activeTab === "Overview") {
-      return <Overview reports={loadedReports} />;
-    }
-    if (activeTab === "Metrics") {
-      return <Metrics reports={loadedReports} />;
-    }
-
-    // Sections receives all reports at once for unified card layout
-    if (activeTab === "Sections") {
-      return <Sections reports={loadedReports} />;
-    }
-
-    // PDF renders per-report
-    return loadedReports.map((r) => {
-      const key = String(r.rssdId) + "::" + r.period;
-      return (
-        <div key={key} style={{ marginBottom: isMulti ? 36 : 0 }}>
-          <ReportGroupHeader report={r} show={isMulti} />
-          {activeTab === "PDF" && <PDFPage pdfUrl={r.pdfUrl} />}
-        </div>
-      );
-    });
-  };
+  const tabContent = (tab) => ({
+    display: activeTab === tab ? "block" : "none",
+  });
 
   // Show splash until both periods and initial bank list are ready
   if (!appReady) {
@@ -418,7 +387,36 @@ export default function App() {
           onToggleSidebar={() => setSidebarCollapsed((c) => !c)}
         />
         <Tabs active={activeTab} setActive={setActiveTab} />
-        <main className="page-content">{renderPage()}</main>
+        <main className="page-content">
+          {/* Overview */}
+          <div style={tabContent("Overview")}>
+            {loadedReports.length === 0 ? emptyState : <Overview reports={loadedReports} />}
+          </div>
+
+          {/* PDF — always mounted so loaded PDFs don't re-fetch */}
+          <div style={tabContent("PDF")}>
+            {loadedReports.length === 0 ? emptyState : <PDFPage reports={loadedReports} />}
+          </div>
+
+          {/* Sections */}
+          <div style={tabContent("Sections")}>
+            {loadedReports.length === 0 ? emptyState : <Sections reports={loadedReports} />}
+          </div>
+
+          {/* Metrics */}
+          <div style={tabContent("Metrics")}>
+            {loadedReports.length === 0 ? emptyState : <Metrics reports={loadedReports} />}
+          </div>
+
+          {/* Custom — always mounted so wizard state is never lost */}
+          <div style={tabContent("Custom")}>
+            <CustomReport
+              selectedBanks={selectedBanks}
+              selectedPeriods={selectedPeriods}
+              banksById={banksById}
+            />
+          </div>
+        </main>
       </div>
     </div>
   );
