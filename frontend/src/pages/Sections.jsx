@@ -2,30 +2,9 @@ import { useState, useMemo } from "react";
 
 const PAGE_SIZE = 20;
 
-const SCHEDULE_COLORS = {
-  RC: "#2563eb", RI: "#059669", "RC-C": "#7c3aed", RIA: "#b45309",
-  RIE: "#0891b2", RIBII: "#be185d", RIC: "#374151", ENT: "#0d9488",
-  SU: "#6d28d9", NARR: "#047857", CI: "#9f1239", RID: "#1d4ed8",
-  RIBI: "#92400e", RIB: "#059669",
-};
 const DEFAULT_COLOR = "#64748b";
 
-const CARD_ACCENTS = [
-  // Muted, desaturated professional palette — colorblind-safe
-  "#1d4ed8",  // steel blue
-  "#065f46",  // deep forest green
-  "#4c1d95",  // deep violet
-  "#78350f",  // dark amber
-  "#164e63",  // deep teal
-  "#831843",  // deep rose
-  "#374151",  // slate
-  "#134e4a",  // dark emerald
-  "#312e81",  // indigo
-  "#064e3b",  // dark green
-  "#881337",  // dark crimson
-  "#1e3a8a",  // royal blue
-  "#451a03",  // dark brown
-];
+import { CARD_ACCENTS, SCHEDULE_COLORS } from "../theme/colors.js";
 
 function BankLogo({ bankName, size = 22 }) {
   const clean = bankName.toLowerCase()
@@ -80,7 +59,7 @@ function ScheduleTable({ sectionName, data }) {
 
   return (
     <div style={{ border: "1px solid #f1f5f9", borderRadius: 8, overflow: "hidden", marginBottom: 8 }}>
-      {/* Schedule row — click to expand */}
+      {/* Schedule row -click to expand */}
       <div
         onClick={() => setOpen(o => !o)}
         style={{
@@ -249,7 +228,7 @@ function ReportCard({ report, accent }) {
       marginBottom: 16,
       boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
     }}>
-      {/* Card header — same as Overview/Metrics */}
+      {/* Card header -same as Overview/Metrics */}
       <div style={{ background: accent, padding: "16px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <BankLogo bankName={report.bankName} size={22} />
@@ -278,7 +257,7 @@ function ReportCard({ report, accent }) {
         </div>
       </div>
 
-      {/* Collapsed preview — schedule pills */}
+      {/* Collapsed preview -schedule pills */}
       <div
         onClick={() => setExpanded(e => !e)}
         style={{

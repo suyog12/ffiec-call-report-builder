@@ -31,7 +31,7 @@ class FFIECClient:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url, headers=headers)
 
-            # DEBUG — print response
+            # DEBUG -print response
             print("STATUS:", response.status_code)
             print("RESPONSE TEXT:", response.text)
 

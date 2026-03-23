@@ -101,7 +101,7 @@ async def get_all_fields(
       total_fields: <int>
     }
 
-    The frontend Custom Report builder should use this endpoint — it
+    The frontend Custom Report builder should use this endpoint -it
     gives the full field catalog needed for field-level selection.
     """
     data = await service.get_sdf_report(rssd_id, reporting_period)

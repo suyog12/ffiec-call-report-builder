@@ -11,7 +11,7 @@ export default function Header({ bank, period, sidebarCollapsed, onToggleSidebar
       position: "sticky",
       top: 0,
       zIndex: 9,
-      // Subtle green-tinted left border — visual echo of the sidebar
+      // Subtle green-tinted left border -visual echo of the sidebar
       boxShadow: "0 1px 3px rgba(17,87,64,0.06)",
     }}>
       {/* Sidebar toggle */}
