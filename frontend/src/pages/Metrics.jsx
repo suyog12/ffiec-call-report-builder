@@ -1,18 +1,4 @@
-const CARD_ACCENTS = [
-  "#1d4ed8",  // steel blue
-  "#065f46",  // deep forest green
-  "#4c1d95",  // deep violet
-  "#78350f",  // dark amber
-  "#164e63",  // deep teal
-  "#831843",  // deep rose
-  "#374151",  // slate
-  "#134e4a",  // dark emerald
-  "#312e81",  // indigo
-  "#064e3b",  // dark green
-  "#881337",  // dark crimson
-  "#1e3a8a",  // royal blue
-  "#451a03",  // dark brown
-];
+import { CARD_ACCENTS } from "../theme/colors.js";
 
 function fmtNum(v) { if (v === null || v === undefined) return "—"; return v.toLocaleString("en-US", { maximumFractionDigits: 0 }); }
 function fmtPct(v) { if (v === null || v === undefined) return "—"; return (v * 100).toFixed(2) + "%"; }
@@ -57,7 +43,7 @@ function MetricsCard({ report, accent }) {
   const m = report.metrics || {};
   return (
     <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,0.05)", display:"flex", flexDirection:"column" }}>
-      {/* Header — same as Overview */}
+      {/* Header -same as Overview */}
       <div style={{ background: accent, padding: "16px 18px 14px" }}>
         <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:5 }}>
           <BankLogo bankName={report.bankName} size={22} />

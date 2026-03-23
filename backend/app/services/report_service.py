@@ -69,7 +69,7 @@ class ReportService:
             except ValueError:
                 return None
 
-        # Build {UPPER_CODE: row} map — keep first occurrence of each code.
+        # Build {UPPER_CODE: row} map -keep first occurrence of each code.
         rows_by_code: dict[str, dict] = {}
         for row in rows:
             code = (row.get("item_code") or "").strip().upper()
@@ -85,7 +85,7 @@ class ReportService:
                 parsed = parse_value(row.get("value"))
                 if parsed is not None:
                     return parsed
-            return None  # explicitly None — never fall back to 0
+            return None  # explicitly None -never fall back to 0
 
         # Total assets
         # RCFD2170 consolidated (most common), RCON2170 domestic, RCFD3368 alt

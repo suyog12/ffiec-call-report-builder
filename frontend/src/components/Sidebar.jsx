@@ -139,7 +139,7 @@ export default function Sidebar({
 
         {/* ── Brand header ─────────────────────────────────── */}
         <div style={{ padding:"22px 18px 18px", borderBottom:"1px solid "+WM_BORDER, flexShrink:0, background:"rgba(0,0,0,0.12)" }}>
-          {/* FFIEC — large, prominent */}
+          {/* FFIEC -large, prominent */}
           <div style={{ fontSize:22, fontWeight:900, color:WM_GOLD, textTransform:"uppercase", letterSpacing:6, marginBottom:8, fontFamily:"Georgia,'Times New Roman',serif" }}>
             FFIEC
           </div>

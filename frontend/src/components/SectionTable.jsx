@@ -49,7 +49,7 @@ export default function SectionTable({ data, sectionName }) {
       marginBottom: 16,
       boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
     }}>
-      {/* ── Card header — same style as Overview/Metrics ── */}
+      {/* ── Card header -same style as Overview/Metrics ── */}
       <div style={{ background: color, padding: "16px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* Schedule badge */}

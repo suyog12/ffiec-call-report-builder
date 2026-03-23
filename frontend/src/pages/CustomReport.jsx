@@ -4,29 +4,9 @@ import { fetchAllFields } from "../services/api";
 // ─── constants ────────────────────────────────────────────────
 const STEPS = ["Schedules", "Fields", "Banks", "Preview"];
 
-const CARD_ACCENTS = [
-  // Muted, desaturated professional palette — colorblind-safe
-  "#1d4ed8",  // steel blue
-  "#065f46",  // deep forest green
-  "#4c1d95",  // deep violet
-  "#78350f",  // dark amber
-  "#164e63",  // deep teal
-  "#831843",  // deep rose
-  "#374151",  // slate
-  "#134e4a",  // dark emerald
-  "#312e81",  // indigo
-  "#064e3b",  // dark green
-  "#881337",  // dark crimson
-  "#1e3a8a",  // royal blue
-  "#451a03",  // dark brown
-];
+import { CARD_ACCENTS, SCHEDULE_COLORS } from "../theme/colors.js";
 
-const SCHEDULE_COLORS = {
-  RC:"#1d4ed8", RI:"#065f46", "RC-C":"#4c1d95", RIA:"#78350f",
-  RIE:"#164e63", RIBII:"#831843", RIC:"#374151", ENT:"#134e4a",
-  SU:"#312e81", NARR:"#064e3b", CI:"#881337", RID:"#1e3a8a",
-  RIBI:"#451a03", RIB:"#065f46",
-};
+
 
 // ─── W&M themed animated buttons ─────────────────────────────
 function WMButton({ children, onClick, disabled, variant = "next" }) {
@@ -117,7 +97,7 @@ function SyncScrollTable({ children, tableWidth, accentColor }) {
 
   return (
     <div>
-      {/* Top scroll rail — styled as a deliberate UI strip, not a naked scrollbar */}
+      {/* Top scroll rail -styled as a deliberate UI strip, not a naked scrollbar */}
       <div style={{ background: col + "18", borderBottom: "1px solid " + col + "30", padding:"4px 0" }}>
         <div style={{ display:"flex", alignItems:"center", gap:8, padding:"0 16px 2px" }}>
           <span style={{ fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:1, color: col, opacity:0.7, flexShrink:0 }}>scroll</span>
@@ -133,7 +113,7 @@ function SyncScrollTable({ children, tableWidth, accentColor }) {
         </div>
       </div>
 
-      {/* Table — bottom scrollbar suppressed so top rail is the only one */}
+      {/* Table -bottom scrollbar suppressed so top rail is the only one */}
       <style>{`.ffiec-body-scroll::-webkit-scrollbar{display:none}`}</style>
       <div
         ref={bodyRef}
@@ -267,7 +247,7 @@ function StepCard({ title, subtitle, accent = "#2563eb", children }) {
 // ─── Step 1: Schedules ────────────────────────────────────────
 function StepSections({ availableSections, selectedSections, onToggle }) {
   // Group by known families; unrecognised schedules go to Other.
-  // No hardcoded fallback — all data comes from the API.
+  // No hardcoded fallback -all data comes from the API.
   const BALANCE_SHEET = new Set(["RC","RC-C","RC-B","RC-D","RC-E","RC-F","RC-G","RC-H","RC-K","RC-L","RC-M","RC-N","RC-O","RC-P","RC-Q","RC-R","RC-S","RC-T","RC-U","RC-V"]);
   const INCOME = new Set(["RI","RIA","RIB","RIBI","RIBII","RIC","RID","RIE"]);
 
@@ -282,7 +262,7 @@ function StepSections({ availableSections, selectedSections, onToggle }) {
     return (
       <StepCard title="Select Schedules" subtitle="No schedules found. Make sure reports are loaded." accent="#1d4ed8">
         <div style={{ textAlign:"center", color:"#94a3b8", fontSize:13, padding:"20px 0" }}>
-          No schedules available — ensure a bank and period are loaded first.
+          No schedules available -ensure a bank and period are loaded first.
         </div>
       </StepCard>
     );
@@ -291,7 +271,7 @@ function StepSections({ availableSections, selectedSections, onToggle }) {
   return (
     <StepCard
       title="Select Schedules"
-      subtitle={availableSections.length + " schedules available from the FFIEC filing — choose which to include."}
+      subtitle={availableSections.length + " schedules available from the FFIEC filing -choose which to include."}
       accent="#1d4ed8"
     >
       {Object.entries(grouped).map(([group, sections]) => {
@@ -635,7 +615,7 @@ function StepPreview({ allCatalogs, selectedBankIds, selectedPeriods, selectedFi
               </div>
             </div>
 
-            {/* Table — only shown when expanded */}
+            {/* Table -only shown when expanded */}
             {sectionOpen && (() => {
               const dataCols = Math.max(colKeys.length, 1);
               const minW     = 110 + 260 + dataCols * 160;
@@ -761,7 +741,7 @@ export default function CustomReport({ selectedBanks, selectedPeriods, banksById
   });
 
   // Load catalog on mount or when bank/period combo changes.
-  // catalogLoaded persists in component state — if the combo hasn't changed,
+  // catalogLoaded persists in component state -if the combo hasn't changed,
   // we skip the fetch. Since React re-mounts this component on tab switch,
   // we track the loaded combo in a ref to avoid redundant fetches.
   const loadedComboRef = React.useRef("");
@@ -807,7 +787,7 @@ export default function CustomReport({ selectedBanks, selectedPeriods, banksById
 
       {catalogError && <div style={{ padding:"10px 14px", background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:8, color:"#dc2626", fontSize:13, marginBottom:16 }}>{catalogError}</div>}
 
-      {/* Step 0 — show spinner while catalog loads, then real sections from API */}
+      {/* Step 0 -show spinner while catalog loads, then real sections from API */}
       {step===0 && (
         loadingCatalog ? (
           <div style={{ padding:"40px 0", textAlign:"center", color:"#94a3b8", fontSize:14 }}>

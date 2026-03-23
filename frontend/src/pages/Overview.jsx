@@ -1,18 +1,4 @@
-const CARD_ACCENTS = [
-  "#1d4ed8",  // steel blue
-  "#065f46",  // deep forest green
-  "#4c1d95",  // deep violet
-  "#78350f",  // dark amber
-  "#164e63",  // deep teal
-  "#831843",  // deep rose
-  "#374151",  // slate
-  "#134e4a",  // dark emerald
-  "#312e81",  // indigo
-  "#064e3b",  // dark green
-  "#881337",  // dark crimson
-  "#1e3a8a",  // royal blue
-  "#451a03",  // dark brown
-];
+import { CARD_ACCENTS } from "../theme/colors.js";
 
 function fmtNum(v) {
   if (v === null || v === undefined) return "—";
@@ -143,7 +129,7 @@ export default function Overview({ reports }) {
         )}
       </div>
 
-      {/* Responsive grid — fills screen width, wraps to next row automatically */}
+      {/* Responsive grid -fills screen width, wraps to next row automatically */}
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",

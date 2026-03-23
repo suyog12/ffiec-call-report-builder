@@ -1,21 +1,6 @@
 import { useState, useRef } from "react";
 
-const CARD_ACCENTS = [
-  // Muted, desaturated professional palette — colorblind-safe
-  "#1d4ed8",  // steel blue
-  "#065f46",  // deep forest green
-  "#4c1d95",  // deep violet
-  "#78350f",  // dark amber
-  "#164e63",  // deep teal
-  "#831843",  // deep rose
-  "#374151",  // slate
-  "#134e4a",  // dark emerald
-  "#312e81",  // indigo
-  "#064e3b",  // dark green
-  "#881337",  // dark crimson
-  "#1e3a8a",  // royal blue
-  "#451a03",  // dark brown
-];
+import { CARD_ACCENTS } from "../theme/colors.js";
 
 function BankLogo({ bankName, size = 22 }) {
   const clean = (bankName || "")
@@ -85,7 +70,7 @@ function PDFCard({ pdfUrl, bankName, period, accent }) {
       marginBottom: 16,
       boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
     }}>
-      {/* Card header — same style as Overview/Metrics/Sections */}
+      {/* Card header -same style as Overview/Metrics/Sections */}
       <div style={{ background: accent, padding: "16px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <BankLogo bankName={bankName} size={22} />
@@ -181,7 +166,7 @@ function PDFCard({ pdfUrl, bankName, period, accent }) {
         </div>
       </div>
 
-      {/* PDF iframe — shown when expanded */}
+      {/* PDF iframe -shown when expanded */}
       {expanded && (
         <div style={{ position: "relative" }}>
           {/* Loading overlay */}
@@ -230,7 +215,7 @@ function PDFCard({ pdfUrl, bankName, period, accent }) {
           ) : (
             <iframe
               src={pdfUrl}
-              title={`Call Report PDF — ${bankName} ${period}`}
+              title={`Call Report PDF -${bankName} ${period}`}
               style={{
                 width: "100%",
                 height: "75vh",

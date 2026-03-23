@@ -44,10 +44,10 @@ ffiec-call-report-app/
 │       ├── clients/
 │       │   └── ffiec_client.py      # All HTTP calls to the FFIEC API
 │       ├── routes/
-│       │   ├── health.py            # GET /health — liveness check
-│       │   ├── periods.py           # GET /periods/ — available reporting periods
-│       │   ├── banks.py             # GET /banks/ — panel of reporters for a period
-│       │   └── reports.py           # GET /reports/* — SDF, PDF, metrics, sections, fields
+│       │   ├── health.py            # GET /health -liveness check
+│       │   ├── periods.py           # GET /periods/ -available reporting periods
+│       │   ├── banks.py             # GET /banks/ -panel of reporters for a period
+│       │   └── reports.py           # GET /reports/* -SDF, PDF, metrics, sections, fields
 │       ├── services/
 │       │   ├── period_service.py    # Thin wrapper around ffiec_client for periods
 │       │   ├── bank_service.py      # Thin wrapper around ffiec_client for banks
@@ -62,7 +62,7 @@ ffiec-call-report-app/
     ├── package.json
     └── src/
         ├── main.jsx                 # React root, mounts App
-        ├── index.css                # Design system — layout, sidebar, buttons, tabs
+        ├── index.css                # Design system -layout, sidebar, buttons, tabs
         ├── App.jsx                  # Root component, global state, data fetching
         ├── services/
         │   └── api.js               # All fetch calls to the backend
@@ -97,10 +97,10 @@ Reads three environment variables using `python-dotenv`: `FFIEC_BASE_URL`, `FFIE
 
 The only file that makes outbound HTTP requests. All requests are async using `httpx.AsyncClient`. It implements four methods:
 
-- `retrieve_reporting_periods` — calls `RetrieveReportingPeriods` with `dataSeries: Call` and returns the list of available quarter-end dates
-- `retrieve_panel_of_reporters` — calls `RetrievePanelOfReporters` for a given period and returns the list of banks with their RSSD IDs, names, cities, and states
-- `retrieve_call_report_pdf` — calls `RetrieveFacsimile` with `facsimileFormat: PDF`, decodes the base64-encoded JSON response, and returns raw PDF bytes
-- `get_facsimile` — calls `RetrieveFacsimile` with `facsimileFormat: SDF` and returns the raw httpx response object for further processing
+- `retrieve_reporting_periods` -calls `RetrieveReportingPeriods` with `dataSeries: Call` and returns the list of available quarter-end dates
+- `retrieve_panel_of_reporters` -calls `RetrievePanelOfReporters` for a given period and returns the list of banks with their RSSD IDs, names, cities, and states
+- `retrieve_call_report_pdf` -calls `RetrieveFacsimile` with `facsimileFormat: PDF`, decodes the base64-encoded JSON response, and returns raw PDF bytes
+- `get_facsimile` -calls `RetrieveFacsimile` with `facsimileFormat: SDF` and returns the raw httpx response object for further processing
 
 Note: the class has a duplicate `_headers` method definition (one instance method, one without `extra_headers`). The second definition shadows the first. This does not currently cause a bug but should be cleaned up.
 
@@ -132,12 +132,12 @@ The metrics currently computed are: total assets, total loans, total deposits, t
 
 Exposes five endpoints under `/reports`:
 
-- `GET /reports/pdf` — streams the PDF bytes back with `Content-Disposition: inline`
-- `GET /reports/sdf` — returns the full parsed SDF as JSON including raw preview, sections, and all rows
-- `GET /reports/available-sections` — returns just the list of section names present in a filing
-- `GET /reports/section-data` — accepts a `sections` query parameter list and returns rows for those sections only
-- `GET /reports/metrics` — returns computed financial metrics plus the total row count
-- `GET /reports/all-fields` — returns all parsed rows grouped by section with internal fields stripped, used by the Custom Report Builder. Each field gets a stable `id` in the format `{section}::{item_code}`.
+- `GET /reports/pdf` -streams the PDF bytes back with `Content-Disposition: inline`
+- `GET /reports/sdf` -returns the full parsed SDF as JSON including raw preview, sections, and all rows
+- `GET /reports/available-sections` -returns just the list of section names present in a filing
+- `GET /reports/section-data` -accepts a `sections` query parameter list and returns rows for those sections only
+- `GET /reports/metrics` -returns computed financial metrics plus the total row count
+- `GET /reports/all-fields` -returns all parsed rows grouped by section with internal fields stripped, used by the Custom Report Builder. Each field gets a stable `id` in the format `{section}::{item_code}`.
 
 ---
 
@@ -187,13 +187,13 @@ Renders an iframe pointing at `/reports/pdf`. The browser renders the PDF native
 
 This is the most complex file in the frontend. It implements a four-step wizard:
 
-**Step 1 — Sections.** The user picks which FFIEC schedules to include. Available sections are grouped into Balance Sheet (RC family), Income (RI family), and Other. Selecting sections does not trigger any API calls yet.
+**Step 1 -Sections.** The user picks which FFIEC schedules to include. Available sections are grouped into Balance Sheet (RC family), Income (RI family), and Other. Selecting sections does not trigger any API calls yet.
 
-**Step 2 — Fields.** The catalog for all selected sections is fetched from `/reports/all-fields` for every bank and period combination in parallel. The first bank and period's catalog is used as the reference for field selection. The user can search by item code or description and select individual fields or all fields within a section using a select-all checkbox with indeterminate state.
+**Step 2 -Fields.** The catalog for all selected sections is fetched from `/reports/all-fields` for every bank and period combination in parallel. The first bank and period's catalog is used as the reference for field selection. The user can search by item code or description and select individual fields or all fields within a section using a select-all checkbox with indeterminate state.
 
-**Step 3 — Banks.** For each bank, the application computes which of the selected fields are actually present in that bank's filing. Single-bank flows show a simple confirmation with a warning listing any missing fields. Multi-bank flows show each bank as a collapsible card with a present/missing badge. The user can expand any bank card to uncheck specific fields for that bank, which creates a per-bank override set.
+**Step 3 -Banks.** For each bank, the application computes which of the selected fields are actually present in that bank's filing. Single-bank flows show a simple confirmation with a warning listing any missing fields. Multi-bank flows show each bank as a collapsible card with a present/missing badge. The user can expand any bank card to uncheck specific fields for that bank, which creates a per-bank override set.
 
-**Step 4 — Preview.** Builds a pivoted table where rows are item codes and columns are bank and/or period combinations. Missing fields show as a dash. The table supports horizontal scrolling when there are many columns. The export functions (`handleCSV` and `handlePDF`) are defined here using the computed `pivoted` and `colKeys` values, then registered into a shared `exportRef` via `useEffect`. The sticky `StepBar` component at the top reads from this ref at click time (not during render) to avoid timing issues.
+**Step 4 -Preview.** Builds a pivoted table where rows are item codes and columns are bank and/or period combinations. Missing fields show as a dash. The table supports horizontal scrolling when there are many columns. The export functions (`handleCSV` and `handlePDF`) are defined here using the computed `pivoted` and `colKeys` values, then registered into a shared `exportRef` via `useEffect`. The sticky `StepBar` component at the top reads from this ref at click time (not during render) to avoid timing issues.
 
 **Export mechanics:**
 

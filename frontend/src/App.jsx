@@ -290,13 +290,13 @@ export default function App() {
         const tag  = name.length > 22 ? name.slice(0, 22) + "…" : name;
         try {
           const m = await fetchMetrics(rssdId, period);
-          tick("Metrics — " + tag);
+          tick("Metrics -" + tag);
 
           const s = await fetchAvailableSections(rssdId, period);
-          tick("Schedules — " + tag);
+          tick("Schedules -" + tag);
 
           const sd = await fetchSectionData(rssdId, period, ["RC", "RI"]);
-          tick("Section data — " + tag);
+          tick("Section data -" + tag);
 
           results[key] = {
             rssdId, period,
@@ -309,7 +309,7 @@ export default function App() {
         } catch (e) {
           // Count remaining steps for this combo as done so bar reaches 100%
           const remaining = 3 - (doneSteps % 3 || 3);
-          for (let i = 0; i < remaining; i++) tick("Error — " + tag);
+          for (let i = 0; i < remaining; i++) tick("Error -" + tag);
           results[key] = { rssdId, period, error: e.message };
         }
       })
@@ -341,7 +341,7 @@ export default function App() {
       : selectedPeriods.length + " periods";
 
   // ── Persistent tab rendering ─────────────────────────────
-  // All tabs stay mounted (never unmount) — switching just toggles display:none.
+  // All tabs stay mounted (never unmount) -switching just toggles display:none.
   // This preserves all state: PDF loaded, Custom wizard step, Sections expanded, etc.
   const emptyState = (
     <div style={{ padding: "60px 0", textAlign: "center", color: "#94a3b8" }}>
@@ -393,7 +393,7 @@ export default function App() {
             {loadedReports.length === 0 ? emptyState : <Overview reports={loadedReports} />}
           </div>
 
-          {/* PDF — always mounted so loaded PDFs don't re-fetch */}
+          {/* PDF -always mounted so loaded PDFs don't re-fetch */}
           <div style={tabContent("PDF")}>
             {loadedReports.length === 0 ? emptyState : <PDFPage reports={loadedReports} />}
           </div>
@@ -408,7 +408,7 @@ export default function App() {
             {loadedReports.length === 0 ? emptyState : <Metrics reports={loadedReports} />}
           </div>
 
-          {/* Custom — always mounted so wizard state is never lost */}
+          {/* Custom -always mounted so wizard state is never lost */}
           <div style={tabContent("Custom")}>
             <CustomReport
               selectedBanks={selectedBanks}
