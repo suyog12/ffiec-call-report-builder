@@ -1,11 +1,13 @@
-# ── Environment files ─────────────────────────────────────────
+# Environment files
 # Never commit real credentials. Copy .env.example and fill in your values.
 .env
 .env.local
 .env.production
 .env.staging
+backend/.env
+frontend/.env
 
-# ── Python ────────────────────────────────────────────────────
+# Python 
 __pycache__/
 *.py[cod]
 *.pyo
@@ -13,8 +15,8 @@ __pycache__/
 .Python
 *.egg
 *.egg-info/
-dist/
 build/
+dist/
 eggs/
 parts/
 var/
@@ -32,7 +34,6 @@ venv/
 .venv/
 env/
 ENV/
-.env/
 
 # pytest / coverage
 .pytest_cache/
@@ -48,13 +49,9 @@ coverage.xml
 .dmypy.json
 dmypy.json
 
-# ── Node / Frontend ───────────────────────────────────────────
+# Node / Frontend ─
 node_modules/
-dist/
-build/
 .cache/
-
-# Vite
 *.local
 
 # Logs
@@ -63,8 +60,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+*.log
 
-# ── OS ────────────────────────────────────────────────────────
+# OS 
 .DS_Store
 .DS_Store?
 ._*
@@ -74,7 +72,7 @@ ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# ── IDEs ──────────────────────────────────────────────────────
+# IDEs 
 .vscode/
 .idea/
 *.sublime-project
@@ -83,8 +81,7 @@ desktop.ini
 *.swo
 *~
 
-# ── Misc ──────────────────────────────────────────────────────
-*.log
+# Misc 
 *.tmp
 *.bak
 *.orig
