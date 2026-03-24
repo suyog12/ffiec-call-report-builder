@@ -14,16 +14,97 @@ import {
   fetchAvailableSections, fetchSectionData, getPdfUrl,
 } from "./services/api";
 
+// ── W&M bookmark SVG ─────────────────────────────────────────
+function WMBookmark({ size = 140, opacity = 1 }) {
+  return (
+    <svg
+      width={size}
+      height={size * 1.35}
+      viewBox="0 0 100 135"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ opacity, filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.25))" }}
+    >
+      {/* Bookmark body */}
+      <path
+        d="M8 0 H92 Q100 0 100 8 V135 L50 105 L0 135 V8 Q0 0 8 0 Z"
+        fill="rgba(255,255,255,0.10)"
+        stroke="rgba(181,161,106,0.55)"
+        strokeWidth="1.5"
+      />
+      {/* Inner gold border */}
+      <path
+        d="M14 8 H86 Q92 8 92 14 V120 L50 95 L8 120 V14 Q8 8 14 8 Z"
+        fill="none"
+        stroke="rgba(181,161,106,0.30)"
+        strokeWidth="0.8"
+      />
+      {/* W&M monogram — W */}
+      <text
+        x="50" y="52"
+        textAnchor="middle"
+        fontFamily="Georgia, 'Times New Roman', serif"
+        fontSize="28"
+        fontWeight="700"
+        fill="#b5a16a"
+        letterSpacing="1"
+      >W&amp;M</text>
+      {/* Divider line */}
+      <line x1="28" y1="62" x2="72" y2="62" stroke="rgba(181,161,106,0.45)" strokeWidth="0.8"/>
+      {/* EST year */}
+      <text
+        x="50" y="76"
+        textAnchor="middle"
+        fontFamily="Georgia, 'Times New Roman', serif"
+        fontSize="9"
+        fill="rgba(209,232,223,0.7)"
+        letterSpacing="2"
+      >EST. 1693</text>
+    </svg>
+  );
+}
+
 // ── Startup splash ────────────────────────────────────────────
 function Splash({ status }) {
   return (
     <div className="app-splash">
-      <div>
-        <div className="app-splash-logo">FFIEC</div>
+      <div className="app-splash-inner">
+
+        {/* W&M Bookmark — large, centered, prominent */}
+        <div className="app-splash-bookmark-wrap">
+          <WMBookmark size={160} opacity={1} />
+        </div>
+
+        {/* Brand name */}
+        <div className="app-splash-brand-text">
+          <div className="app-splash-kicker">William &amp; Mary</div>
+          <div className="app-splash-program">MSBA · Team 9 · Class of 2026</div>
+        </div>
+
+        {/* Title block */}
+        <div className="app-splash-header-block">
+          <div className="app-splash-logo">FFIEC</div>
+          <div className="app-splash-divider" />
+          <div className="app-splash-title">Reports Analysis Dashboard</div>
+          <div className="app-splash-subtitle">
+            Federal Financial Institutions Examination Council
+          </div>
+        </div>
+
+        {/* Spinner */}
+        <div className="app-splash-spinner-wrap">
+          <div className="app-splash-spinner" />
+          <div className="app-splash-status">{status}</div>
+        </div>
+
+        {/* Footer */}
+        <div className="app-splash-footer">
+          <div className="app-splash-footer-copy">
+            © 2026 FFIEC Reports Analysis Dashboard. All rights reserved. For academic use only.
+          </div>
+        </div>
+
       </div>
-      <div className="app-splash-badge">Call Reports</div>
-      <div className="app-splash-spinner" />
-      <div className="app-splash-status">{status}</div>
     </div>
   );
 }
@@ -290,13 +371,13 @@ export default function App() {
         const tag  = name.length > 22 ? name.slice(0, 22) + "…" : name;
         try {
           const m = await fetchMetrics(rssdId, period);
-          tick("Metrics -" + tag);
+          tick("Metrics — " + tag);
 
           const s = await fetchAvailableSections(rssdId, period);
-          tick("Schedules -" + tag);
+          tick("Schedules — " + tag);
 
           const sd = await fetchSectionData(rssdId, period, ["RC", "RI"]);
-          tick("Section data -" + tag);
+          tick("Section data — " + tag);
 
           results[key] = {
             rssdId, period,
@@ -309,7 +390,7 @@ export default function App() {
         } catch (e) {
           // Count remaining steps for this combo as done so bar reaches 100%
           const remaining = 3 - (doneSteps % 3 || 3);
-          for (let i = 0; i < remaining; i++) tick("Error -" + tag);
+          for (let i = 0; i < remaining; i++) tick("Error — " + tag);
           results[key] = { rssdId, period, error: e.message };
         }
       })
@@ -341,7 +422,7 @@ export default function App() {
       : selectedPeriods.length + " periods";
 
   // ── Persistent tab rendering ─────────────────────────────
-  // All tabs stay mounted (never unmount) -switching just toggles display:none.
+  // All tabs stay mounted (never unmount) — switching just toggles display:none.
   // This preserves all state: PDF loaded, Custom wizard step, Sections expanded, etc.
   const emptyState = (
     <div style={{ padding: "60px 0", textAlign: "center", color: "#94a3b8" }}>
@@ -393,7 +474,7 @@ export default function App() {
             {loadedReports.length === 0 ? emptyState : <Overview reports={loadedReports} />}
           </div>
 
-          {/* PDF -always mounted so loaded PDFs don't re-fetch */}
+          {/* PDF — always mounted so loaded PDFs don't re-fetch */}
           <div style={tabContent("PDF")}>
             {loadedReports.length === 0 ? emptyState : <PDFPage reports={loadedReports} />}
           </div>
@@ -408,7 +489,7 @@ export default function App() {
             {loadedReports.length === 0 ? emptyState : <Metrics reports={loadedReports} />}
           </div>
 
-          {/* Custom -always mounted so wizard state is never lost */}
+          {/* Custom — always mounted so wizard state is never lost */}
           <div style={tabContent("Custom")}>
             <CustomReport
               selectedBanks={selectedBanks}

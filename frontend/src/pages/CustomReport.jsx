@@ -93,11 +93,11 @@ function SyncScrollTable({ children, tableWidth, accentColor }) {
   const onTop  = () => { if (syncing.current) return; syncing.current = true; if (bodyRef.current) bodyRef.current.scrollLeft = topRef.current.scrollLeft; syncing.current = false; };
   const onBody = () => { if (syncing.current) return; syncing.current = true; if (topRef.current)  topRef.current.scrollLeft  = bodyRef.current.scrollLeft;  syncing.current = false; };
 
-  const col = accentColor || "#2563eb";
+  const col = accentColor || "#115740";
 
   return (
     <div>
-      {/* Top scroll rail -styled as a deliberate UI strip, not a naked scrollbar */}
+      {/* Top scroll rail — styled as a deliberate UI strip, not a naked scrollbar */}
       <div style={{ background: col + "18", borderBottom: "1px solid " + col + "30", padding:"4px 0" }}>
         <div style={{ display:"flex", alignItems:"center", gap:8, padding:"0 16px 2px" }}>
           <span style={{ fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:1, color: col, opacity:0.7, flexShrink:0 }}>scroll</span>
@@ -113,7 +113,7 @@ function SyncScrollTable({ children, tableWidth, accentColor }) {
         </div>
       </div>
 
-      {/* Table -bottom scrollbar suppressed so top rail is the only one */}
+      {/* Table — bottom scrollbar suppressed so top rail is the only one */}
       <style>{`.ffiec-body-scroll::-webkit-scrollbar{display:none}`}</style>
       <div
         ref={bodyRef}
@@ -154,10 +154,157 @@ function BankLogo({ bankName, size = 20 }) {
 }
 
 // ─── print + export ───────────────────────────────────────────
-const PRINT_STYLE = `* {box-sizing:border-box;margin:0;padding:0;} body{font-family:system-ui,sans-serif;font-size:11px;color:#111;} @page{margin:1.2cm 1.5cm;size:A4 landscape;} h1{font-size:15px;margin:0 0 4px;} .meta{font-size:10px;color:#555;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #2563eb;} .section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#2563eb;margin:14px 0 4px;border-bottom:1px solid #2563eb;padding-bottom:2px;} table{width:100%;border-collapse:collapse;margin-bottom:4px;} th{background:#f3f4f6;font-size:9px;text-transform:uppercase;letter-spacing:.5px;padding:4px 6px;text-align:left;border:1px solid #ddd;} td{padding:3px 6px;border:1px solid #eee;font-size:10px;} .num{text-align:right;font-family:monospace;} .subtotal-row td{font-weight:700;background:#f9fafb;border-color:#ddd;}`;
+const PRINT_STYLE = `
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 10.5px;
+    color: #1a2e20;
+    line-height: 1.5;
+  }
+  @page {
+    margin: 1.6cm 1.8cm 2cm;
+    size: A4 landscape;
+  }
+
+  /* ── W&M page header ── */
+  .wm-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    margin-bottom: 16px;
+    border-bottom: 2.5px solid #115740;
+  }
+  .wm-header-left { display: flex; align-items: center; gap: 10px; }
+  .wm-bookmark {
+    width: 20px;
+    height: 26px;
+    background: #115740;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+    flex-shrink: 0;
+  }
+  .wm-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #115740;
+    font-family: Georgia, serif;
+    letter-spacing: 0.2px;
+  }
+  .wm-sub {
+    font-size: 8.5px;
+    color: #5a7a68;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    margin-top: 2px;
+  }
+  .wm-right {
+    font-size: 8.5px;
+    color: #5a7a68;
+    text-align: right;
+    line-height: 1.6;
+  }
+  .wm-right strong { color: #1a2e20; }
+
+  /* ── Report title ── */
+  h1 {
+    font-size: 17px;
+    font-weight: 700;
+    color: #115740;
+    margin: 0 0 4px;
+    font-family: Georgia, serif;
+    letter-spacing: -0.3px;
+  }
+  .meta {
+    font-size: 9px;
+    color: #5a7a68;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #c5d8ce;
+  }
+
+  /* ── Schedule section headers ── */
+  .section-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #ffffff;
+    background: #115740;
+    padding: 4px 10px;
+    margin: 16px 0 0;
+    border-radius: 3px 3px 0 0;
+  }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  thead tr {
+    background: #eef5f0;
+  }
+  th {
+    font-size: 8.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 5px 8px;
+    text-align: left;
+    border: 1px solid #c5d8ce;
+    color: #1a4731;
+  }
+  td {
+    padding: 4px 8px;
+    border: 1px solid #e8f0ec;
+    font-size: 9.5px;
+    color: #1a2e20;
+  }
+  tr:nth-child(even) td { background: #f4f9f6; }
+  .num  { text-align: right; font-family: "Courier New", monospace; white-space: nowrap; min-width: 80px; }
+  .code { font-family: "Courier New", monospace; font-size: 9px; color: #1a4731; white-space: nowrap; }
+  td:nth-child(2) { min-width: 180px; max-width: 340px; word-wrap: break-word; }
+  .subtotal-row td { font-weight: 700; background: #eef5f0; border-color: #c5d8ce; color: #115740; }
+
+  /* ── W&M footer ── */
+  .wm-footer {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    padding: 5px 1.8cm;
+    border-top: 1px solid #c5d8ce;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 7.5px;
+    color: #7aaa95;
+    background: white;
+    font-family: Georgia, serif;
+  }
+`;
 
 function triggerPrint(html, title) {
-  const doc = "<!DOCTYPE html><html><head><meta charset='utf-8'/><title>"+title+"</title><style>"+PRINT_STYLE+"</style></head><body>"+html+"</body></html>";
+  const wmHeader = `
+    <div class="wm-header">
+      <div class="wm-header-left">
+        <div class="wm-bookmark"></div>
+        <div>
+          <div class="wm-name">William &amp; Mary</div>
+          <div class="wm-sub">MSBA &middot; Team 9 &middot; Class of 2026</div>
+        </div>
+      </div>
+      <div class="wm-right">
+        FFIEC Reports Analysis Dashboard<br/>
+        Generated: ${new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'})}
+      </div>
+    </div>`;
+  const wmFooter = `
+    <div class="wm-footer">
+      <span>FFIEC Reports Analysis Dashboard &mdash; William &amp; Mary MSBA Team 9 &copy; 2026</span>
+      <span>For academic and analytical use only</span>
+    </div>`;
+  const doc = "<!DOCTYPE html><html><head><meta charset='utf-8'/><title>"+title+"</title><style>"+PRINT_STYLE+"</style></head><body>"+wmHeader+html+wmFooter+"</body></html>";
   const old = document.getElementById("ffiec-iframe"); if(old) old.remove();
   const f = document.createElement("iframe");
   f.id="ffiec-iframe"; f.style.cssText="position:fixed;top:0;left:0;width:0;height:0;border:none;visibility:hidden;";
@@ -190,7 +337,7 @@ function StepBar({ steps, current, onBack, onNext, nextDisabled, nextLabel, isPr
           return (
             <div key={s} style={{ display:"flex", alignItems:"center", flex: i < steps.length-1 ? 1 : "none" }}>
               <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-                <div style={{ width:26, height:26, borderRadius:"50%", background: done?"#115740":active?"#1d4ed8":"#e8ede9", color: done||active?"#fff":"#9ca3af", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700 }}>
+                <div style={{ width:26, height:26, borderRadius:"50%", background: done?"#115740":active?"#115740":"#e8ede9", color: done||active?"#fff":"#9ca3af", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700 }}>
                   {done ? "✓" : i+1}
                 </div>
                 <span style={{ fontSize:10, fontWeight:active?700:400, color:active?"#1a2e20":done?"#2d5240":"#94a3b8", whiteSpace:"nowrap" }}>{s}</span>
@@ -232,7 +379,7 @@ function StepBar({ steps, current, onBack, onNext, nextDisabled, nextLabel, isPr
 }
 
 // ─── Step card shell ──────────────────────────────────────────
-function StepCard({ title, subtitle, accent = "#2563eb", children }) {
+function StepCard({ title, subtitle, accent = "#115740", children }) {
   return (
     <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,0.05)", marginBottom:16 }}>
       <div style={{ background:accent, padding:"16px 20px" }}>
@@ -247,7 +394,7 @@ function StepCard({ title, subtitle, accent = "#2563eb", children }) {
 // ─── Step 1: Schedules ────────────────────────────────────────
 function StepSections({ availableSections, selectedSections, onToggle }) {
   // Group by known families; unrecognised schedules go to Other.
-  // No hardcoded fallback -all data comes from the API.
+  // No hardcoded fallback — all data comes from the API.
   const BALANCE_SHEET = new Set(["RC","RC-C","RC-B","RC-D","RC-E","RC-F","RC-G","RC-H","RC-K","RC-L","RC-M","RC-N","RC-O","RC-P","RC-Q","RC-R","RC-S","RC-T","RC-U","RC-V"]);
   const INCOME = new Set(["RI","RIA","RIB","RIBI","RIBII","RIC","RID","RIE"]);
 
@@ -260,9 +407,9 @@ function StepSections({ availableSections, selectedSections, onToggle }) {
 
   if (availableSections.length === 0) {
     return (
-      <StepCard title="Select Schedules" subtitle="No schedules found. Make sure reports are loaded." accent="#1d4ed8">
+      <StepCard title="Select Schedules" subtitle="No schedules found. Make sure reports are loaded." accent="#115740">
         <div style={{ textAlign:"center", color:"#94a3b8", fontSize:13, padding:"20px 0" }}>
-          No schedules available -ensure a bank and period are loaded first.
+          No schedules available — ensure a bank and period are loaded first.
         </div>
       </StepCard>
     );
@@ -271,8 +418,8 @@ function StepSections({ availableSections, selectedSections, onToggle }) {
   return (
     <StepCard
       title="Select Schedules"
-      subtitle={availableSections.length + " schedules available from the FFIEC filing -choose which to include."}
-      accent="#1d4ed8"
+      subtitle={availableSections.length + " schedules available from the FFIEC filing — choose which to include."}
+      accent="#115740"
     >
       {Object.entries(grouped).map(([group, sections]) => {
         if (!sections.length) return null;
@@ -326,14 +473,14 @@ function StepFields({ catalogSections, selectedFieldIds, onToggleField, onToggle
   }, [catalogSections, search]);
 
   return (
-    <StepCard title="Select Fields" subtitle={`Pick individual fields. ${selectedFieldIds.size > 0 ? selectedFieldIds.size+" selected" : "All will be fetched for every bank and period."}`} accent="#1d4ed8">
+    <StepCard title="Select Fields" subtitle={`Pick individual fields. ${selectedFieldIds.size > 0 ? selectedFieldIds.size+" selected" : "All will be fetched for every bank and period."}`} accent="#115740">
       {/* Search */}
       <div style={{ position:"relative", marginBottom:16 }}>
         <span style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", fontSize:13, color:"#94a3b8", pointerEvents:"none" }}>⌕</span>
         <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Search by code or description…"
           style={{ width:"100%", padding:"8px 12px 8px 30px", border:"1px solid #e2e8f0", borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box" }}
-          onFocus={e=>e.target.style.borderColor="#2563eb"}
+          onFocus={e=>e.target.style.borderColor="#115740"}
           onBlur={e=>e.target.style.borderColor="#e2e8f0"}
         />
       </div>
@@ -355,7 +502,7 @@ function StepFields({ catalogSections, selectedFieldIds, onToggleField, onToggle
                 onChange={e => { e.stopPropagation(); onToggleSection(fields, !allSel); }}
                 onClick={e => e.stopPropagation()}
                 style={{ accentColor:col, flexShrink:0 }} />
-              <div style={{ width:28, height:28, borderRadius:6, background: open?col:col+"15", color: open?"#fff":col, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:800, flexShrink:0 }}>
+              <div style={{ width:28, height:28, borderRadius:6, background: open?col:col+"20", color: open?"#fff":col, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:800, flexShrink:0 }}>
                 {section.slice(0,3)}
               </div>
               <span style={{ fontWeight:700, fontSize:13, color:"#0f172a" }}>Schedule {section}</span>
@@ -447,7 +594,7 @@ function StepBanks({ banks, selectedBankIds, allCatalogs, selectedFieldIds, bank
   }
 
   return (
-    <StepCard title="Field Matching" subtitle={`${selectedFieldIds.size} fields will be applied to all banks. Missing fields show as —.`} accent="#1d4ed8">
+    <StepCard title="Field Matching" subtitle={`${selectedFieldIds.size} fields will be applied to all banks. Missing fields show as —.`} accent="#115740">
       {selectedBankIds.map((rssdId, bi) => {
         const bank  = banks[rssdId];
         const st    = bankStatus[rssdId] || {};
@@ -465,7 +612,7 @@ function StepBanks({ banks, selectedBankIds, allCatalogs, selectedFieldIds, bank
                 <div style={{ fontSize:11, color:"#94a3b8", marginTop:1 }}>{st.present?.length||0} found · {st.missing?.length||0} missing</div>
               </div>
               {st.missing?.length > 0
-                ? <span style={{ fontSize:11, background:"#fffbeb", color:"#92400e", border:"1px solid #fcd34d", padding:"2px 9px", borderRadius:99 }}>⚠ {st.missing.length} missing</span>
+                ? <span style={{ fontSize:11, background:"#fef9ed", color:"#78350f", border:"1px solid #e8cb8a", padding:"2px 9px", borderRadius:99 }}>⚠ {st.missing.length} missing</span>
                 : <span style={{ fontSize:11, background:"#f0fdf4", color:"#1a5c35", border:"1px solid #86efac", padding:"2px 9px", borderRadius:99 }}>✓ All found</span>}
               <span style={{ fontSize:10, color:"#94a3b8" }}>{isOpen?"▲":"▼"}</span>
             </div>
@@ -509,9 +656,15 @@ function StepPreview({ allCatalogs, selectedBankIds, selectedPeriods, selectedFi
       const rssdId = cat.rssdId;
       if (!selectedBankIds.includes(rssdId) && !selectedBankIds.includes(Number(rssdId))) continue;
       const overrides = bankFieldOverrides[rssdId] || bankFieldOverrides[Number(rssdId)] || selectedFieldIds;
+      // Always include bank name + period so header is meaningful even for single report
+      const bankName = banks[rssdId]?.Name || String(rssdId);
       const colKey = isMultiBank && isMultiPeriod
-        ? (banks[rssdId]?.Name || rssdId) + "\n" + cat.period
-        : isMultiBank ? (banks[rssdId]?.Name || String(rssdId)) : cat.period;
+        ? bankName + "\n" + cat.period
+        : isMultiBank
+        ? bankName
+        : isMultiPeriod
+        ? cat.period
+        : bankName + "\n" + cat.period;  // single: show both
       for (const [section, fields] of Object.entries(cat.sections)) {
         for (const f of fields) {
           if (!selectedFieldIds.has(f.item_code) || !overrides.has(f.item_code)) continue;
@@ -524,33 +677,48 @@ function StepPreview({ allCatalogs, selectedBankIds, selectedPeriods, selectedFi
     return data;
   }, [allCatalogs, selectedBankIds, selectedPeriods, selectedFieldIds, bankFieldOverrides, banks, isMultiBank, isMultiPeriod]);
 
+  // Always collect column keys — even single bank/period gets a "Value" column
   const colKeys = useMemo(() => {
-    if (!isMultiBank && !isMultiPeriod) return [];
     const keys = new Set();
     for (const section of Object.values(pivoted))
       for (const row of Object.values(section))
         Object.keys(row.values).forEach(k => keys.add(k));
     return [...keys].sort();
-  }, [pivoted, isMultiBank, isMultiPeriod]);
+  }, [pivoted]);
 
   const handlePDF = () => {
-    const label = selectedBankIds.length > 1 ? selectedBankIds.length+" Banks" : (banks[selectedBankIds[0]]?.Name||"");
-    let html = "<h1>"+label+"</h1><div class=\"meta\">Periods: <strong>"+selectedPeriods.join(", ")+"</strong> | Generated: <strong>"+new Date().toLocaleString()+"</strong></div>";
+    const bankLabel = selectedBankIds.length > 1
+      ? selectedBankIds.length + " Banks Compared"
+      : (banks[selectedBankIds[0]]?.Name || "");
+    const dateStr = new Date().toLocaleDateString("en-US", {year:"numeric",month:"long",day:"numeric"});
+
+    let html = "<h1>"+bankLabel+"</h1><div class=\"meta\">Period"+
+      (selectedPeriods.length > 1 ? "s" : "")+": <strong>"+selectedPeriods.join(", ")+"</strong></div>";
+
     for (const [sec, rows] of Object.entries(pivoted)) {
       if (!Object.keys(rows).length) continue;
-      html += "<div class=\"section-title\">"+sec+"</div><table><thead><tr><th>Code</th><th>Description</th>"+colKeys.map(k=>"<th class=\"num\">"+k.replace("\n"," · ")+"</th>").join("")+"</tr></thead><tbody>";
-      for (const [code, row] of Object.entries(rows))
-        html += "<tr><td>"+code+"</td><td>"+row.description+"</td>"+colKeys.map(k=>"<td class=\"num\">"+fmt(row.values[k]??null)+"</td>").join("")+"</tr>";
+      // Column headers: use cleaned key (replace newline with " · ")
+      const colHeaders = colKeys.map(k => "<th class=\"num\">" + k.replace("\n", "<br/>") + "</th>").join("");
+      html += "<div class=\"section-title\">Schedule "+sec+"</div>";
+      html += "<table><thead><tr><th>Code</th><th>Description</th>" + colHeaders + "</tr></thead><tbody>";
+      for (const [code, row] of Object.entries(rows)) {
+        const vals = colKeys.map(k => {
+          const v = row.values[k];
+          return "<td class=\"num\">" + fmt(v ?? null) + "</td>";
+        }).join("");
+        html += "<tr><td class=\"code\">"+code+"</td><td>"+row.description+"</td>"+vals+"</tr>";
+      }
       html += "</tbody></table>";
     }
-    triggerPrint(html, "FFIEC Custom Report");
+    triggerPrint(html, "FFIEC Custom Report — "+bankLabel);
   };
   const handleCSV = () => {
-    const rows = [["Section","Item Code","Description",...colKeys.map(k=>k.replace("\n"," · "))]];
+    const headers = ["Section","Item Code","Description",...colKeys.map(k=>k.replace("\n"," · "))];
+    const dataRows = [];
     for (const [sec, items] of Object.entries(pivoted))
       for (const [code, row] of Object.entries(items))
-        rows.push([sec, code, row.description, ...colKeys.map(k=>row.values[k]??"")]);
-    exportCSV(rows, "call_report_custom_"+new Date().toISOString().slice(0,10)+".csv");
+        dataRows.push([sec, code, row.description, ...colKeys.map(k=>row.values[k]??"")]);
+    exportCSV([headers, ...dataRows], "ffiec_custom_report_"+new Date().toISOString().slice(0,10)+".csv");
   };
 
   if (exportRef) { exportRef.current._csv = handleCSV; exportRef.current._pdf = handlePDF; }
@@ -561,7 +729,7 @@ function StepPreview({ allCatalogs, selectedBankIds, selectedPeriods, selectedFi
     <div>
       {/* Summary card */}
       <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,0.05)", marginBottom:16 }}>
-        <div style={{ background:"#1d4ed8", padding:"16px 20px", display:"flex", alignItems:"center", gap:20 }}>
+        <div style={{ background:"#115740", padding:"16px 20px", display:"flex", alignItems:"center", gap:20 }}>
           <div>
             <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", textTransform:"uppercase", letterSpacing:0.8 }}>Banks</div>
             <div style={{ fontSize:22, fontWeight:800, color:"#fff" }}>{selectedBankIds.length}</div>
@@ -615,7 +783,7 @@ function StepPreview({ allCatalogs, selectedBankIds, selectedPeriods, selectedFi
               </div>
             </div>
 
-            {/* Table -only shown when expanded */}
+            {/* Table — only shown when expanded */}
             {sectionOpen && (() => {
               const dataCols = Math.max(colKeys.length, 1);
               const minW     = 110 + 260 + dataCols * 160;
@@ -741,7 +909,7 @@ export default function CustomReport({ selectedBanks, selectedPeriods, banksById
   });
 
   // Load catalog on mount or when bank/period combo changes.
-  // catalogLoaded persists in component state -if the combo hasn't changed,
+  // catalogLoaded persists in component state — if the combo hasn't changed,
   // we skip the fetch. Since React re-mounts this component on tab switch,
   // we track the loaded combo in a ref to avoid redundant fetches.
   const loadedComboRef = React.useRef("");
@@ -787,7 +955,7 @@ export default function CustomReport({ selectedBanks, selectedPeriods, banksById
 
       {catalogError && <div style={{ padding:"10px 14px", background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:8, color:"#dc2626", fontSize:13, marginBottom:16 }}>{catalogError}</div>}
 
-      {/* Step 0 -show spinner while catalog loads, then real sections from API */}
+      {/* Step 0 — show spinner while catalog loads, then real sections from API */}
       {step===0 && (
         loadingCatalog ? (
           <div style={{ padding:"40px 0", textAlign:"center", color:"#94a3b8", fontSize:14 }}>
