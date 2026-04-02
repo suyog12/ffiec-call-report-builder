@@ -32,66 +32,118 @@ function BankLogo({ bankName, accent, size = 22 }) {
   );
 }
 
-function SnapshotCard({ report, accent }) {
+// Single period row inside a bank card
+function PeriodRow({ report, accent, isLast }) {
   const m = report.metrics || {};
-  const highlights = [
-    { label: "Total Assets",   value: fmtNum(m.total_assets),   sub: "RCFD2170 · $K" },
-    { label: "Total Loans",    value: fmtNum(m.total_loans),    sub: "RCFD2122 · $K" },
-    { label: "Total Deposits", value: fmtNum(m.total_deposits), sub: "RCFD2200 · $K" },
-    { label: "Total Equity",   value: fmtNum(m.total_equity),   sub: "RCFD3210 · $K" },
-  ];
-  const ratios = [
-    { label: "Net Income",        value: fmtNum(m.net_income),        sub: "RIAD4340 · $K" },
-    { label: "Equity / Assets",   value: fmtPct(m.equity_to_assets),  sub: "Capital adequacy" },
-    { label: "Loans / Deposits",  value: fmtPct(m.loans_to_deposits), sub: "Loan-to-deposit" },
-    { label: "Residential Ratio", value: fmtPct(m.residential_ratio), sub: "% of total loans" },
+  const metrics = [
+    { label: "Total Assets",   value: fmtNum(m.total_assets) },
+    { label: "Total Loans",    value: fmtNum(m.total_loans) },
+    { label: "Total Deposits", value: fmtNum(m.total_deposits) },
+    { label: "Total Equity",   value: fmtNum(m.total_equity) },
+    { label: "Net Income",     value: fmtNum(m.net_income) },
+    { label: "Equity/Assets",  value: fmtPct(m.equity_to_assets) },
+    { label: "Loans/Deposits", value: fmtPct(m.loans_to_deposits) },
+    { label: "Res. Ratio",     value: fmtPct(m.residential_ratio) },
   ];
 
   return (
-    <div style={{
-      background: "#fff", border: "1px solid #e2e8f0",
-      borderRadius: 14, overflow: "hidden",
-      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-      display: "flex", flexDirection: "column",
-    }}>
-      <div style={{ background: accent, padding: "16px 18px 14px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-          <BankLogo bankName={report.bankName} accent={accent} size={22} />
-          <div style={{ fontSize: 11, fontWeight: 800, color: "#fff", textTransform: "uppercase", letterSpacing: 0.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {report.bankName}
-          </div>
-        </div>
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", display: "flex", alignItems: "center", gap: 5 }}>
-          <span style={{ width: 5, height: 5, borderRadius: "50%", background: "rgba(255,255,255,0.5)", flexShrink: 0 }} />
+    <div style={{ borderBottom: isLast ? "none" : "1px solid #f0f4ee" }}>
+      {/* Period label row */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "8px 16px",
+        background: "#f8fafc",
+        borderBottom: "1px solid #f0f4ee",
+      }}>
+        <span style={{ width: 6, height: 6, borderRadius: "50%", background: accent, flexShrink: 0, opacity: 0.7 }} />
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#374151", letterSpacing: 0.2 }}>
           {report.period}
+        </span>
+      </div>
+      {/* Metrics grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", borderBottom: "1px solid #f0f4ee" }}>
+        {metrics.slice(0, 4).map(({ label, value }, i) => (
+          <div key={label} style={{
+            padding: "11px 14px",
+            borderRight: i < 3 ? "1px solid #f0f4ee" : "none",
+          }}>
+            <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, color: "#94a3b8", marginBottom: 3 }}>{label}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "monospace", color: value === "—" ? "#cbd5e1" : "#0f172a", letterSpacing: "-0.5px" }}>{value}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
+        {metrics.slice(4).map(({ label, value }, i) => (
+          <div key={label} style={{
+            padding: "11px 14px",
+            borderRight: i < 3 ? "1px solid #f0f4ee" : "none",
+          }}>
+            <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, color: "#94a3b8", marginBottom: 3 }}>{label}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "monospace", color: value === "—" ? "#cbd5e1" : accent, letterSpacing: "-0.5px" }}>{value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// One card per bank, containing all periods
+function BankCard({ bankName, reports, accent }) {
+  return (
+    <div style={{
+      background: "#fff",
+      border: "1px solid #e2e8f0",
+      borderRadius: 14,
+      overflow: "hidden",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+    }}>
+      {/* Bank header */}
+      <div style={{ background: accent, padding: "16px 18px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <BankLogo bankName={bankName} accent={accent} size={22} />
+          <div style={{ fontSize: 12, fontWeight: 800, color: "#fff", textTransform: "uppercase", letterSpacing: 0.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {bankName}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {reports.map(r => (
+            <span key={r.period} style={{
+              fontSize: 10, color: "rgba(255,255,255,0.8)",
+              background: "rgba(255,255,255,0.15)",
+              padding: "2px 8px", borderRadius: 99,
+              border: "1px solid rgba(255,255,255,0.2)",
+            }}>
+              {r.period}
+            </span>
+          ))}
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid #f1f5f9" }}>
-        {highlights.map(({ label, value, sub }, i) => (
-          <div key={label} style={{ padding: "13px 14px", borderRight: i % 2 === 0 ? "1px solid #f1f5f9" : "none", borderBottom: i < 2 ? "1px solid #f1f5f9" : "none" }}>
-            <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, color: "#94a3b8", marginBottom: 4 }}>{label}</div>
-            <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "monospace", color: value === "—" ? "#cbd5e1" : "#0f172a", letterSpacing: "-0.5px" }}>{value}</div>
-            <div style={{ fontSize: 9, color: "#cbd5e1", marginTop: 2 }}>{sub}</div>
+      {/* Column headers */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr",
+        padding: "6px 14px",
+        background: "#f8fafc",
+        borderBottom: "1px solid #e2e8f0",
+      }}>
+        {["Total Assets", "Total Loans", "Total Deposits", "Total Equity"].map((h, i) => (
+          <div key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, color: "#64748b", paddingRight: i < 3 ? 14 : 0 }}>
+            {h}
           </div>
         ))}
       </div>
 
-      <div style={{ flex: 1 }}>
-        {ratios.map(({ label, value, sub }) => (
-          <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 14px", borderBottom: "1px solid #f8fafc" }}>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 500, color: "#374151" }}>{label}</div>
-              <div style={{ fontSize: 9, color: "#cbd5e1" }}>{sub}</div>
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "monospace", color: value === "—" ? "#cbd5e1" : accent, letterSpacing: "-0.3px" }}>
-              {value}
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Period rows */}
+      {reports.map((report, i) => (
+        <PeriodRow
+          key={report.period}
+          report={report}
+          accent={accent}
+          isLast={i === reports.length - 1}
+        />
+      ))}
 
-      <div style={{ padding: "7px 14px", background: "#f8fafc", borderTop: "1px solid #f1f5f9", fontSize: 9, color: "#cbd5e1", textAlign: "right" }}>
+      <div style={{ padding: "6px 14px", background: "#f8fafc", borderTop: "1px solid #f1f5f9", fontSize: 9, color: "#cbd5e1", textAlign: "right" }}>
         Values in thousands (USD)
       </div>
     </div>
@@ -110,7 +162,18 @@ export default function Overview({ reports }) {
     );
   }
 
-  const uniqueBanks   = [...new Set(list.map(r => r.bankName))].length;
+  // Group reports by bank name, assign one consistent color per bank
+  const bankMap = {};
+  const bankOrder = [];
+  list.forEach(r => {
+    if (!bankMap[r.bankName]) {
+      bankMap[r.bankName] = [];
+      bankOrder.push(r.bankName);
+    }
+    bankMap[r.bankName].push(r);
+  });
+
+  const uniqueBanks   = bankOrder.length;
   const uniquePeriods = [...new Set(list.map(r => r.period))].length;
 
   return (
@@ -120,24 +183,20 @@ export default function Overview({ reports }) {
           {list.length === 1 ? list[0].bankName : `${list.length} Reports`}
         </div>
         <div style={{ fontSize: 12, color: "#94a3b8" }}>
-          {list.length === 1 ? list[0].period : `${uniqueBanks} bank${uniqueBanks > 1 ? "s" : ""} · ${uniquePeriods} period${uniquePeriods > 1 ? "s" : ""}`}
+          {list.length === 1
+            ? list[0].period
+            : `${uniqueBanks} bank${uniqueBanks > 1 ? "s" : ""} · ${uniquePeriods} period${uniquePeriods > 1 ? "s" : ""}`}
         </div>
-        {list.length > 1 && (
-          <div style={{ marginLeft: "auto", fontSize: 11, color: "#64748b", background: "#f1f5f9", padding: "3px 10px", borderRadius: 99 }}>
-            Switch to Metrics for full comparison table
-          </div>
-        )}
       </div>
 
-      {/* Responsive grid -fills screen width, wraps to next row automatically */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-        gap: 14,
-        alignItems: "start",
-      }}>
-        {list.map((report, i) => (
-          <SnapshotCard key={report.bankName + "::" + report.period} report={report} accent={CARD_ACCENTS[i % CARD_ACCENTS.length]} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {bankOrder.map((bankName, i) => (
+          <BankCard
+            key={bankName}
+            bankName={bankName}
+            reports={bankMap[bankName]}
+            accent={CARD_ACCENTS[i % CARD_ACCENTS.length]}
+          />
         ))}
       </div>
     </div>

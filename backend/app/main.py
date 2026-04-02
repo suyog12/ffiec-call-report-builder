@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import health, periods, banks, reports
+from app.routes import health, periods, banks, reports, ubpr
 
 app = FastAPI(title="FFIEC Call Report API")
 
@@ -20,3 +20,4 @@ app.include_router(health.router)
 app.include_router(periods.router)
 app.include_router(banks.router)
 app.include_router(reports.router)
+app.include_router(ubpr.router)

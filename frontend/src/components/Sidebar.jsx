@@ -2,13 +2,11 @@ import { useEffect, useRef, useState } from "react";
 
 const WM_GREEN      = "#115740";
 const WM_GREEN_DARK = "#0d4232";
-const WM_GREEN_MID  = "#1a6b4f";
 const WM_GOLD       = "#b5a16a";
 const WM_TEXT       = "#d1e8df";
 const WM_MUTED      = "#7aaa95";
 const WM_BORDER     = "#0f4a35";
 
-// ── Multi-select dropdown ─────────────────────────────────────
 function MultiSelect({ label, options, selected, onToggle, placeholder, loading, onSearch, searchValue }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -95,14 +93,15 @@ function MultiSelect({ label, options, selected, onToggle, placeholder, loading,
   );
 }
 
-// ── Main Sidebar ──────────────────────────────────────────────
 export default function Sidebar({
   collapsed,
+  activeSection, onSectionChange,
   periods, periodsLoading, selectedPeriods, onTogglePeriod,
   banks, selectedBanks, onToggleBank, bankQuery, setBankQuery,
   onLoad, loading,
 }) {
-  const [expanded, setExpanded] = useState(true);
+  // Both sections collapsed by default
+  const [callExpanded, setCallExpanded] = useState(false);
   const [periodSearch, setPeriodSearch] = useState("");
 
   const filteredPeriods = (periods || [])
@@ -127,6 +126,19 @@ export default function Sidebar({
   const reportCount = selectedBanks.length * selectedPeriods.length;
   const canLoad     = selectedBanks.length > 0 && selectedPeriods.length > 0;
 
+  const handleCallClick = () => {
+    if (activeSection !== "call") {
+      onSectionChange("call");
+      setCallExpanded(true);
+    } else {
+      setCallExpanded(e => !e);
+    }
+  };
+
+  const handleUBPRClick = () => {
+    onSectionChange("ubpr");
+  };
+
   return (
     <aside style={{
       width: collapsed ? 0 : 272, minWidth: collapsed ? 0 : 272,
@@ -137,63 +149,59 @@ export default function Sidebar({
     }}>
       <div style={{ width:272, height:"100%", display:"flex", flexDirection:"column", overflowY:"auto", overflowX:"hidden" }}>
 
-        {/* ── Brand header ─────────────────────────────────── */}
+        {/* Brand header */}
         <div style={{ padding:"22px 18px 18px", borderBottom:"1px solid "+WM_BORDER, flexShrink:0, background:"rgba(0,0,0,0.12)" }}>
-          {/* FFIEC -large, prominent */}
           <div style={{ fontSize:22, fontWeight:900, color:WM_GOLD, textTransform:"uppercase", letterSpacing:6, marginBottom:8, fontFamily:"Georgia,'Times New Roman',serif" }}>
             FFIEC
           </div>
-          {/* Divider */}
           <div style={{ height:1, background:"rgba(181,161,106,0.3)", marginBottom:10 }} />
-          {/* Main title */}
           <div style={{ fontSize:14, fontWeight:700, color:"#fff", letterSpacing:"0.2px", lineHeight:1.45, marginBottom:6 }}>
             Reports Analysis Dashboard
           </div>
-          {/* Subtitle */}
           <div style={{ fontSize:10, color:"rgba(209,232,223,0.65)", letterSpacing:0.2, lineHeight:1.5 }}>
             Federal Financial Institutions<br />Examination Council
           </div>
         </div>
 
-        {/* ── Call Reports nav item ─────────────────────────── */}
+        {/* Navigation */}
         <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
 
-          {/* Section toggle row */}
+          {/* Call Reports nav item */}
           <div
-            onClick={() => setExpanded(e => !e)}
+            onClick={handleCallClick}
             style={{
               display:"flex", alignItems:"center", gap:12,
               padding:"12px 18px",
               cursor:"pointer", userSelect:"none",
-              background: expanded ? "rgba(0,0,0,0.18)" : "transparent",
-              borderBottom:"1px solid "+(expanded ? WM_BORDER : "transparent"),
-              borderLeft: expanded ? "3px solid "+WM_GOLD : "3px solid transparent",
+              background: activeSection === "call" ? "rgba(0,0,0,0.18)" : "transparent",
+              borderBottom:"1px solid "+(callExpanded && activeSection === "call" ? WM_BORDER : "transparent"),
+              borderLeft: activeSection === "call" ? "3px solid "+WM_GOLD : "3px solid transparent",
               transition:"all 0.15s",
             }}
-            onMouseEnter={e => { if(!expanded) e.currentTarget.style.background="rgba(255,255,255,0.06)"; }}
-            onMouseLeave={e => { if(!expanded) e.currentTarget.style.background="transparent"; }}
+            onMouseEnter={e => { if(activeSection !== "call") e.currentTarget.style.background="rgba(255,255,255,0.06)"; }}
+            onMouseLeave={e => { if(activeSection !== "call") e.currentTarget.style.background="transparent"; }}
           >
             <span style={{
               width:32, height:32, borderRadius:7, flexShrink:0,
-              background: expanded ? "rgba(181,161,106,0.22)" : "rgba(255,255,255,0.1)",
-              color: expanded ? WM_GOLD : "#a8d4c0",
+              background: activeSection === "call" ? "rgba(181,161,106,0.22)" : "rgba(255,255,255,0.1)",
+              color: activeSection === "call" ? WM_GOLD : "#a8d4c0",
               display:"flex", alignItems:"center", justifyContent:"center", fontSize:14,
             }}>
               ⎙
             </span>
             <div style={{ flex:1 }}>
-              <div style={{ fontSize:13, fontWeight: expanded ? 700 : 500, color: expanded ? "#fff" : WM_TEXT }}>
+              <div style={{ fontSize:13, fontWeight: activeSection === "call" ? 700 : 500, color: activeSection === "call" ? "#fff" : WM_TEXT }}>
                 Call Reports
               </div>
               <div style={{ fontSize:10, color:"#9fc4b3", marginTop:1 }}>
                 Select banks &amp; periods
               </div>
             </div>
-            <span style={{ fontSize:10, color:"#a8d4c0" }}>{expanded ? "▲" : "▼"}</span>
+            <span style={{ fontSize:10, color:"#a8d4c0" }}>{callExpanded && activeSection === "call" ? "▲" : "▼"}</span>
           </div>
 
-          {/* Expanded panel */}
-          {expanded && (
+          {/* Expanded Call Reports panel */}
+          {callExpanded && activeSection === "call" && (
             <div style={{ background:"rgba(0,0,0,0.15)", borderBottom:"1px solid "+WM_BORDER, padding:"12px 14px 4px" }}>
               <MultiSelect
                 label="Reporting Periods"
@@ -216,7 +224,6 @@ export default function Sidebar({
                 searchValue={bankQuery}
               />
 
-              {/* Summary strip */}
               {reportCount > 0 && (
                 <div style={{ background:"rgba(0,0,0,0.2)", border:"1px solid "+WM_BORDER, borderRadius:8, padding:"10px 12px", marginBottom:10 }}>
                   <div style={{ display:"flex", gap:0, marginBottom: selectedPeriods.length>0 ? 8 : 0 }}>
@@ -238,7 +245,6 @@ export default function Sidebar({
                 </div>
               )}
 
-              {/* Load button */}
               <button onClick={onLoad} disabled={!canLoad||loading}
                 style={{
                   width:"100%", padding:"10px 16px", fontSize:13, fontWeight:700,
@@ -259,12 +265,45 @@ export default function Sidebar({
               </button>
             </div>
           )}
+
+          {/* Financial Analysis (UBPR) nav item */}
+          <div
+            onClick={handleUBPRClick}
+            style={{
+              display:"flex", alignItems:"center", gap:12,
+              padding:"12px 18px",
+              cursor:"pointer", userSelect:"none",
+              background: activeSection === "ubpr" ? "rgba(0,0,0,0.18)" : "transparent",
+              borderBottom:"1px solid "+(activeSection === "ubpr" ? WM_BORDER : "transparent"),
+              borderLeft: activeSection === "ubpr" ? "3px solid "+WM_GOLD : "3px solid transparent",
+              transition:"all 0.15s",
+            }}
+            onMouseEnter={e => { if(activeSection !== "ubpr") e.currentTarget.style.background="rgba(255,255,255,0.06)"; }}
+            onMouseLeave={e => { if(activeSection !== "ubpr") e.currentTarget.style.background="transparent"; }}
+          >
+            <span style={{
+              width:32, height:32, borderRadius:7, flexShrink:0,
+              background: activeSection === "ubpr" ? "rgba(181,161,106,0.22)" : "rgba(255,255,255,0.1)",
+              color: activeSection === "ubpr" ? WM_GOLD : "#a8d4c0",
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:14,
+            }}>
+              ◎
+            </span>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, fontWeight: activeSection === "ubpr" ? 700 : 500, color: activeSection === "ubpr" ? "#fff" : WM_TEXT }}>
+                Financial Analysis
+              </div>
+              <div style={{ fontSize:10, color:"#9fc4b3", marginTop:1 }}>
+                UBPR · Ratios · Trends · Peers
+              </div>
+            </div>
+          </div>
+
         </div>
 
-        {/* ── Footer ───────────────────────────────────────── */}
+        {/* Footer */}
         <div style={{ padding:"14px 18px", borderTop:"1px solid "+WM_BORDER, flexShrink:0 }}>
           <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
-            {/* W&M shield placeholder */}
             <div style={{
               width:28, height:28, borderRadius:4, flexShrink:0,
               background:"rgba(181,161,106,0.15)",

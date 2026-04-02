@@ -3,3 +3,8 @@ uvicorn
 httpx
 python-dotenv
 pydantic
+boto3
+duckdb
+pyarrow
+python-dotenv
+pandas

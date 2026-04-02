@@ -1,0 +1,9 @@
+boto3
+pyspark
+duckdb
+pandas
+pyarrow
+requests
+ffiec-data-collector
+python-dotenv
+setuptools

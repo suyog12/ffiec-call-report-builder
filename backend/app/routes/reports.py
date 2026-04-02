@@ -1,10 +1,11 @@
 from typing import List
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import Response
 from app.services.report_service import ReportService
+import logging
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
-
+logger = logging.getLogger(__name__)
 service = ReportService()
 
 
@@ -13,17 +14,21 @@ async def get_report_pdf(
     rssd_id: int = Query(...),
     reporting_period: str = Query(...),
 ):
-    pdf_bytes = await service.get_call_report_pdf(rssd_id, reporting_period)
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": (
-                f'inline; filename="call_report_{rssd_id}'
-                f'_{reporting_period.replace("/", "-")}.pdf"'
-            )
-        },
-    )
+    try:
+        pdf_bytes = await service.get_call_report_pdf(rssd_id, reporting_period)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": (
+                    f'inline; filename="call_report_{rssd_id}'
+                    f'_{reporting_period.replace("/", "-")}.pdf"'
+                )
+            },
+        )
+    except Exception as e:
+        logger.error(f"PDF fetch failed [{rssd_id} {reporting_period}]: {e}")
+        raise HTTPException(status_code=404, detail=f"Report not available for {reporting_period}. Data may not yet be filed with FFIEC.")
 
 
 @router.get("/sdf")
@@ -31,7 +36,11 @@ async def get_report_sdf(
     rssd_id: int = Query(...),
     reporting_period: str = Query(...),
 ):
-    return await service.get_sdf_report(rssd_id, reporting_period)
+    try:
+        return await service.get_sdf_report(rssd_id, reporting_period)
+    except Exception as e:
+        logger.error(f"SDF fetch failed [{rssd_id} {reporting_period}]: {e}")
+        raise HTTPException(status_code=404, detail=f"Report not available for {reporting_period}.")
 
 
 @router.get("/available-sections")
@@ -39,12 +48,16 @@ async def get_available_sections(
     rssd_id: int = Query(...),
     reporting_period: str = Query(...),
 ):
-    data = await service.get_sdf_report(rssd_id, reporting_period)
-    return {
-        "rssd_id": rssd_id,
-        "reporting_period": reporting_period,
-        "available_sections": data["available_sections"],
-    }
+    try:
+        data = await service.get_sdf_report(rssd_id, reporting_period)
+        return {
+            "rssd_id": rssd_id,
+            "reporting_period": reporting_period,
+            "available_sections": data["available_sections"],
+        }
+    except Exception as e:
+        logger.error(f"Sections fetch failed [{rssd_id} {reporting_period}]: {e}")
+        raise HTTPException(status_code=404, detail=f"Report not available for {reporting_period}.")
 
 
 @router.get("/section-data")
@@ -53,7 +66,11 @@ async def get_section_data(
     reporting_period: str = Query(...),
     sections: List[str] = Query(...),
 ):
-    return await service.get_selected_sections(rssd_id, reporting_period, sections)
+    try:
+        return await service.get_selected_sections(rssd_id, reporting_period, sections)
+    except Exception as e:
+        logger.error(f"Section data fetch failed [{rssd_id} {reporting_period}]: {e}")
+        raise HTTPException(status_code=404, detail=f"Report not available for {reporting_period}.")
 
 
 @router.get("/metrics")
@@ -61,21 +78,18 @@ async def get_metrics(
     rssd_id: int = Query(...),
     reporting_period: str = Query(...),
 ):
-    data = await service.get_sdf_report(rssd_id, reporting_period)
-    metrics = service.build_metrics(data["all_rows"])
-
-    # Include which item_codes were found so the frontend can debug easily
-    codes_found = {
-        (row.get("item_code") or "").strip().upper(): True
-        for row in data["all_rows"]
-    }
-
-    return {
-        "rssd_id": rssd_id,
-        "reporting_period": reporting_period,
-        "total_rows_parsed": len(data["all_rows"]),
-        "metrics": metrics,
-    }
+    try:
+        data = await service.get_sdf_report(rssd_id, reporting_period)
+        metrics = service.build_metrics(data["all_rows"])
+        return {
+            "rssd_id": rssd_id,
+            "reporting_period": reporting_period,
+            "total_rows_parsed": len(data["all_rows"]),
+            "metrics": metrics,
+        }
+    except Exception as e:
+        logger.error(f"Metrics fetch failed [{rssd_id} {reporting_period}]: {e}")
+        raise HTTPException(status_code=404, detail=f"Report not available for {reporting_period}.")
 
 
 @router.get("/all-fields")
@@ -85,28 +99,19 @@ async def get_all_fields(
 ):
     """
     Returns every parsed SDF row, grouped by section.
-
-    Shape returned:
-    {
-      rssd_id, reporting_period,
-      available_sections: [...],
-      sections: {
-        "RC": [
-          { item_code, description, value, line_number, section, ... },
-          ...
-        ],
-        "RI": [...],
-        ...
-      },
-      total_fields: <int>
-    }
-
-    The frontend Custom Report builder should use this endpoint -it
-    gives the full field catalog needed for field-level selection.
+    Used by the Custom Report builder for field-level selection.
+    Returns 404 with a clear message if the period has no data yet.
     """
-    data = await service.get_sdf_report(rssd_id, reporting_period)
+    try:
+        data = await service.get_sdf_report(rssd_id, reporting_period)
+    except Exception as e:
+        logger.error(f"all-fields fetch failed [{rssd_id} {reporting_period}]: {e}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"No filing data available for period {reporting_period}. "
+                   f"This period may not yet have been filed with the FFIEC."
+        )
 
-    # Strip heavy/internal-only keys from each row before sending to frontend
     clean_sections: dict[str, list[dict]] = {}
     for section, rows in data["sections"].items():
         clean_sections[section] = [
