@@ -109,6 +109,7 @@ This will:
 
 - create a Python virtual environment if needed
 - install backend dependencies if needed
+- install the bigdata package (DuckDB + R2 query engine) if needed
 - install frontend dependencies if needed
 - start backend and frontend
 - open the app in your browser
@@ -124,6 +125,7 @@ cd backend
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
+pip install -e ../bigdata
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
@@ -164,6 +166,15 @@ http://localhost:5173
 **Backend does not start**  
 Check that `backend/.env` exists and contains the required values.
 
+**Financial Analysis tab shows no data**  
+Make sure `backend/.env` contains valid Cloudflare R2 credentials:
+```
+R2_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=<your_key>
+R2_SECRET_ACCESS_KEY=<your_secret>
+R2_BUCKET=ffiec-data
+```
+
 ---
 
 ## Notes
@@ -171,3 +182,4 @@ Check that `backend/.env` exists and contains the required values.
 - Do not commit real `.env` files to Git
 - Commit only `.env.example` files
 - The `app.run` folder is meant for local convenience, not cloud hosting
+- The Financial Analysis module requires Cloudflare R2 access for UBPR trend data
