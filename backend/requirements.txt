@@ -7,3 +7,4 @@ boto3
 duckdb
 pyarrow
 python-dotenv
+pandas
