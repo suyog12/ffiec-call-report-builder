@@ -35,7 +35,6 @@ export async function fetchSectionData(rssdId, reportingPeriod, sections) {
   params.append("rssd_id", rssdId);
   params.append("reporting_period", reportingPeriod);
   sections.forEach((s) => params.append("sections", s));
-
   const response = await fetch(`${BASE_URL}/reports/section-data?${params}`);
   if (!response.ok) throw new Error("Failed to fetch section data");
   return response.json();
@@ -49,13 +48,6 @@ export async function fetchMetrics(rssdId, reportingPeriod) {
   return response.json();
 }
 
-/**
- * Fetch the full field catalog (all sections + all rows).
- * Used exclusively by the Custom Report builder.
- *
- * Returns:
- *   { available_sections, sections: { RC: [...], RI: [...] }, total_fields }
- */
 export async function fetchAllFields(rssdId, reportingPeriod) {
   const response = await fetch(
     `${BASE_URL}/reports/all-fields?rssd_id=${rssdId}&reporting_period=${encodeURIComponent(reportingPeriod)}`
@@ -66,4 +58,58 @@ export async function fetchAllFields(rssdId, reportingPeriod) {
 
 export function getPdfUrl(rssdId, reportingPeriod) {
   return `${BASE_URL}/reports/pdf?rssd_id=${rssdId}&reporting_period=${encodeURIComponent(reportingPeriod)}`;
+}
+
+// ── UBPR endpoints ────────────────────────────────────────────
+
+export async function fetchUBPRQuarters() {
+  const response = await fetch(`${BASE_URL}/ubpr/quarters`);
+  if (!response.ok) throw new Error("Failed to fetch UBPR quarters");
+  return response.json();
+}
+
+export async function fetchUBPRRatios(rssdId, quarterDate) {
+  const response = await fetch(
+    `${BASE_URL}/ubpr/ratios?rssd_id=${rssdId}&quarter_date=${quarterDate}`
+  );
+  if (!response.ok) throw new Error("Failed to fetch UBPR ratios");
+  return response.json();
+}
+
+export async function fetchUBPRPeerComparison(rssdId, quarterDate, peerGroup = "all") {
+  const response = await fetch(
+    `${BASE_URL}/ubpr/peer-comparison?rssd_id=${rssdId}&quarter_date=${quarterDate}&peer_group=${peerGroup}`
+  );
+  if (!response.ok) throw new Error("Failed to fetch UBPR peer comparison");
+  return response.json();
+}
+
+export async function fetchUBPRAllFields(rssdId, quarterDate) {
+  const response = await fetch(
+    `${BASE_URL}/ubpr/all-fields?rssd_id=${rssdId}&quarter_date=${quarterDate}`
+  );
+  if (!response.ok) throw new Error("Failed to fetch UBPR all fields");
+  return response.json();
+}
+
+/**
+ * Fetch trend data for specific metric codes across a quarter range.
+ * Only fetches the exact columns the user selected — fast columnar pushdown.
+ *
+ * @param {string} rssdId
+ * @param {string} fromQuarter - YYYYMMDD
+ * @param {string} toQuarter   - YYYYMMDD
+ * @param {string[]} codes     - UBPR column codes e.g. ["UBPR7204", "UBPRE013"]
+ */
+export async function fetchUBPRTrend(rssdId, fromQuarter, toQuarter, codes = []) {
+  if (!codes.length) throw new Error("At least one metric code is required");
+  const params = new URLSearchParams({
+    rssd_id: rssdId,
+    from_quarter: fromQuarter,
+    to_quarter: toQuarter,
+  });
+  codes.forEach(c => params.append("codes", c));
+  const response = await fetch(`${BASE_URL}/ubpr/trend?${params}`);
+  if (!response.ok) throw new Error("Failed to fetch UBPR trend");
+  return response.json();
 }

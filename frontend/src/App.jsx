@@ -8,6 +8,7 @@ import PDFPage from "./pages/PDFPage";
 import Sections from "./pages/Sections";
 import Metrics from "./pages/Metrics";
 import CustomReport from "./pages/CustomReport";
+import UBPRDashboard from "./pages/UBPRDashboard";
 
 import {
   fetchBanks, fetchPeriods, fetchMetrics,
@@ -118,120 +119,49 @@ function LoadingOverlay({ progress }) {
     <div style={{
       position: "fixed",
       inset: 0,
-      background: "rgba(15, 23, 42, 0.65)",
-      backdropFilter: "blur(3px)",
+      background: "rgba(15, 23, 42, 0.35)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       zIndex: 100,
-      animation: "fadeIn 0.2s ease",
     }}>
       <div style={{
         background: "#fff",
-        borderRadius: 14,
-        padding: "32px 40px",
-        width: 360,
-        boxShadow: "0 24px 60px rgba(0,0,0,0.25)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 20,
+        borderRadius: 10,
+        padding: "24px 28px",
+        width: 340,
+        boxShadow: "0 8px 32px rgba(0,0,0,0.14)",
       }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 9,
-            background: "#eff6ff",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0,
-          }}>
-            <div style={{
-              width: 18, height: 18,
-              border: "2.5px solid #bfdbfe",
-              borderTopColor: "#0ea5e9",
-              borderRadius: "50%",
-              animation: "spin 0.7s linear infinite",
-            }} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: "#0f172a" }}>
-              Loading Reports
-            </div>
-            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>
-              Fetching data from FFIEC API
-            </div>
-          </div>
+        {/* Title */}
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginBottom: 14 }}>
+          Fetching reports…
         </div>
 
-        {/* Progress bar track */}
-        <div>
-          <div style={{
-            height: 6, background: "#f1f5f9",
-            borderRadius: 99, overflow: "hidden",
-          }}>
-            <div style={{
-              height: "100%",
-              width: pct + "%",
-              background: "linear-gradient(90deg, #0ea5e9, #38bdf8)",
-              borderRadius: 99,
-              transition: "width 0.35s ease",
-            }} />
-          </div>
-          <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginTop: 8,
-            fontSize: 11,
-          }}>
-            <span style={{ color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 240 }}>
-              {label}
-            </span>
-            <span style={{ color: "#0ea5e9", fontWeight: 700, flexShrink: 0 }}>
-              {pct}%
+        {/* File row */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, color: "#374151", fontWeight: 500 }}>
+              FFIEC Call Report data
             </span>
           </div>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>
+            {pct}%
+          </span>
         </div>
 
-        {/* Step indicators */}
-        <div style={{
-          display: "flex",
-          justifyContent: "space-between",
-          padding: "10px 14px",
-          background: "#f8fafc",
-          borderRadius: 8,
-        }}>
-          {["Metrics", "Schedules", "Section Data"].map((step, i) => {
-            // Each step covers 1/3 of progress per combo
-            const stepsPerCombo  = 3;
-            const combos         = total / stepsPerCombo;
-            const stepThreshold  = Math.round(((i + 1) / stepsPerCombo) * 100);
-            const stepDone       = pct >= stepThreshold || (i === 2 && pct === 100);
-            const stepActive     = !stepDone && pct >= Math.round((i / stepsPerCombo) * 100);
-            return (
-              <div key={step} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-                <div style={{
-                  width: 22, height: 22, borderRadius: "50%",
-                  background: stepDone ? "#0ea5e9" : stepActive ? "#e0f2fe" : "#f1f5f9",
-                  border: stepActive ? "2px solid #0ea5e9" : "2px solid transparent",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  transition: "all 0.2s",
-                }}>
-                  {stepDone
-                    ? <span style={{ fontSize: 10, color: "#fff", fontWeight: 800 }}>✓</span>
-                    : stepActive
-                    ? <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#0ea5e9" }} />
-                    : null
-                  }
-                </div>
-                <span style={{ fontSize: 10, color: stepDone ? "#0ea5e9" : "#94a3b8", fontWeight: stepDone ? 600 : 400 }}>
-                  {step}
-                </span>
-              </div>
-            );
-          })}
+        {/* Progress bar */}
+        <div style={{ height: 5, background: "#e5e7eb", borderRadius: 99, overflow: "hidden" }}>
+          <div style={{
+            height: "100%",
+            width: pct + "%",
+            background: "#115740",
+            borderRadius: 99,
+            transition: "width 0.3s ease",
+          }} />
         </div>
 
-        {/* Step count */}
-        <div style={{ textAlign: "center", fontSize: 11, color: "#94a3b8" }}>
+        {/* Sub-label */}
+        <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>
           {done} of {total} requests complete
         </div>
       </div>
@@ -253,6 +183,7 @@ function ReportGroupHeader({ report, show }) {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("Overview");
+  const [activeSection, setActiveSection] = useState("call"); // "call" | "ubpr"
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // ── Startup loading state ─────────────────────────────────
@@ -447,6 +378,12 @@ export default function App() {
       {loadingReport && <LoadingOverlay progress={loadProgress} />}
       <Sidebar
         collapsed={sidebarCollapsed}
+        activeSection={activeSection}
+        onSectionChange={(section) => {
+          setActiveSection(section);
+          if (section === "ubpr") setActiveTab("UBPR");
+          else setActiveTab("Overview");
+        }}
         periods={periods}
         periodsLoading={false}
         selectedPeriods={selectedPeriods}
@@ -462,42 +399,52 @@ export default function App() {
 
       <div className="main-content">
         <Header
-          bank={headerBank}
-          period={headerPeriod}
+          bank={activeSection === "ubpr" ? "Financial Analysis" : headerBank}
+          period={activeSection === "ubpr" ? "" : headerPeriod}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={() => setSidebarCollapsed((c) => !c)}
         />
-        <Tabs active={activeTab} setActive={setActiveTab} />
-        <main className="page-content">
-          {/* Overview */}
-          <div style={tabContent("Overview")}>
-            {loadedReports.length === 0 ? emptyState : <Overview reports={loadedReports} />}
-          </div>
 
-          {/* PDF — always mounted so loaded PDFs don't re-fetch */}
-          <div style={tabContent("PDF")}>
-            {loadedReports.length === 0 ? emptyState : <PDFPage reports={loadedReports} />}
-          </div>
+        {/* UBPR mode — full page, no tabs */}
+        {activeSection === "ubpr" ? (
+          <main className="page-content" style={{ padding: 0 }}>
+            <UBPRDashboard />
+          </main>
+        ) : (
+          <>
+            <Tabs active={activeTab} setActive={setActiveTab} />
+            <main className="page-content">
+              {/* Overview */}
+              <div style={tabContent("Overview")}>
+                {loadedReports.length === 0 ? emptyState : <Overview reports={loadedReports} />}
+              </div>
 
-          {/* Sections */}
-          <div style={tabContent("Sections")}>
-            {loadedReports.length === 0 ? emptyState : <Sections reports={loadedReports} />}
-          </div>
+              {/* PDF — always mounted so loaded PDFs don't re-fetch */}
+              <div style={tabContent("PDF")}>
+                {loadedReports.length === 0 ? emptyState : <PDFPage reports={loadedReports} />}
+              </div>
 
-          {/* Metrics */}
-          <div style={tabContent("Metrics")}>
-            {loadedReports.length === 0 ? emptyState : <Metrics reports={loadedReports} />}
-          </div>
+              {/* Sections */}
+              <div style={tabContent("Sections")}>
+                {loadedReports.length === 0 ? emptyState : <Sections reports={loadedReports} />}
+              </div>
 
-          {/* Custom — always mounted so wizard state is never lost */}
-          <div style={tabContent("Custom")}>
-            <CustomReport
-              selectedBanks={selectedBanks}
-              selectedPeriods={selectedPeriods}
-              banksById={banksById}
-            />
-          </div>
-        </main>
+              {/* Metrics */}
+              <div style={tabContent("Metrics")}>
+                {loadedReports.length === 0 ? emptyState : <Metrics reports={loadedReports} />}
+              </div>
+
+              {/* Custom — always mounted so wizard state is never lost */}
+              <div style={tabContent("Custom")}>
+                <CustomReport
+                  selectedBanks={selectedBanks}
+                  selectedPeriods={selectedPeriods}
+                  banksById={banksById}
+                />
+              </div>
+            </main>
+          </>
+        )}
       </div>
     </div>
   );

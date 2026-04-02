@@ -1,7 +1,7 @@
 export default function Header({ bank, period, sidebarCollapsed, onToggleSidebar }) {
   return (
     <div style={{
-      background: "#fafbf8",
+      background: "#fff",
       borderBottom: "1px solid #e4e9e2",
       padding: "0 24px",
       height: 56,
@@ -11,7 +11,6 @@ export default function Header({ bank, period, sidebarCollapsed, onToggleSidebar
       position: "sticky",
       top: 0,
       zIndex: 9,
-      // Subtle green-tinted left border -visual echo of the sidebar
       boxShadow: "0 1px 3px rgba(17,87,64,0.06)",
     }}>
       {/* Sidebar toggle */}
@@ -35,33 +34,43 @@ export default function Header({ bank, period, sidebarCollapsed, onToggleSidebar
         {sidebarCollapsed ? "☰" : "✕"}
       </button>
 
-      {/* Green accent dot */}
+      {/* W&M green accent bar */}
       <div style={{
-        width: 6, height: 6, borderRadius: "50%",
+        width: 3, height: 22, borderRadius: 2,
         background: "#115740",
         flexShrink: 0,
-        opacity: 0.5,
       }} />
 
-      {/* Bank name */}
+      {/* Title in Georgia serif */}
       <span style={{
-        fontWeight: 600, fontSize: 14,
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        fontWeight: 700,
+        fontStyle: "italic",
+        fontSize: 15,
         color: "#1a2e20",
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-        maxWidth: 400,
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        maxWidth: 420,
+        letterSpacing: "0.01em",
       }}>
         {bank || "Select a Bank"}
       </span>
 
-      {/* Period badge */}
+      {/* Period badge — only for call report (not UBPR) */}
       {period && period !== "—" && (
         <span style={{
-          fontSize: 12, color: "#5a7a68",
-          background: "#eef2eb",
+          fontSize: 11,
+          color: "#5a7a68",
+          background: "#f4f6f0",
           border: "1px solid #d4ddd0",
           padding: "3px 10px",
-          borderRadius: 99,
-          whiteSpace: "nowrap", flexShrink: 0,
+          borderRadius: 4,
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+          fontWeight: 500,
+          letterSpacing: "0.02em",
+          textTransform: "uppercase",
         }}>
           {period}
         </span>

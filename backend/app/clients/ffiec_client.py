@@ -10,15 +10,6 @@ class FFIECClient:
         self.user_id = settings.FFIEC_USER_ID
         self.token = settings.FFIEC_PWS_TOKEN
 
-    def _headers(self, extra_headers=None):
-        headers = {
-            "UserID": self.user_id,
-            "Authentication": f"Bearer {self.token}",
-        }
-        if extra_headers:
-            headers.update(extra_headers)
-        return headers
-
     async def retrieve_reporting_periods(self):
         url = f"{self.base_url}/RetrieveReportingPeriods"
 

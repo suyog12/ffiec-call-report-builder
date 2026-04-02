@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-
 import { CARD_ACCENTS } from "../theme/colors.js";
 
 function BankLogo({ bankName, size = 22 }) {
@@ -23,31 +22,29 @@ function BankLogo({ bankName, size = 22 }) {
   );
 }
 
-// ── Single PDF card ───────────────────────────────────────────
-function PDFCard({ pdfUrl, bankName, period, accent }) {
-  const [expanded, setExpanded]     = useState(false);
-  const [loading, setLoading]       = useState(false);
-  const [loaded, setLoaded]         = useState(false);
-  const [progress, setProgress]     = useState(0);
-  const [error, setError]           = useState(false);
-  const progressRef                 = useRef(null);
+// ── PDF viewer for a single period ───────────────────────────
+function PDFViewer({ pdfUrl, bankName, period, accent }) {
+  const [loading, setLoading] = useState(false);
+  const [loaded,  setLoaded]  = useState(false);
+  const [error,   setError]   = useState(false);
+  const [progress, setProgress] = useState(0);
+  const progressRef = useRef(null);
 
-  const handleExpand = () => {
-    if (!expanded && !loaded) {
-      setExpanded(true);
-      setLoading(true);
-      setProgress(0);
-      // Fake progress that climbs to 85% while iframe loads
-      let p = 0;
-      progressRef.current = setInterval(() => {
-        p += Math.random() * 8;
-        if (p >= 85) { p = 85; clearInterval(progressRef.current); }
-        setProgress(Math.round(p));
-      }, 250);
-    } else {
-      setExpanded(o => !o);
-    }
+  // Auto-load when mounted (since user already clicked the tab)
+  const startLoad = () => {
+    if (loaded || loading) return;
+    setLoading(true);
+    setProgress(0);
+    let p = 0;
+    progressRef.current = setInterval(() => {
+      p += Math.random() * 8;
+      if (p >= 85) { p = 85; clearInterval(progressRef.current); }
+      setProgress(Math.round(p));
+    }, 250);
   };
+
+  // Trigger load on first render of this viewer
+  useState(() => { startLoad(); });
 
   const handleLoad = () => {
     clearInterval(progressRef.current);
@@ -62,175 +59,156 @@ function PDFCard({ pdfUrl, bankName, period, accent }) {
   };
 
   return (
+    <div style={{ position: "relative" }}>
+      {loading && (
+        <div style={{
+          position: "absolute", inset: 0, zIndex: 2,
+          background: "#f8fafc",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 16,
+          minHeight: 300,
+        }}>
+          <div style={{
+            width: 36, height: 36,
+            border: "3px solid #e2e8f0",
+            borderTopColor: accent,
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+          }} />
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+              Loading PDF…
+            </div>
+            <div style={{ width: 240, height: 6, background: "#e2e8f0", borderRadius: 99, overflow: "hidden" }}>
+              <div style={{
+                height: "100%", width: progress + "%",
+                background: `linear-gradient(90deg, ${accent}, ${accent}99)`,
+                borderRadius: 99, transition: "width 0.3s ease",
+              }} />
+            </div>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 5 }}>
+              {progress}% · Pages rendering in browser
+            </div>
+          </div>
+        </div>
+      )}
+
+      {error ? (
+        <div style={{
+          padding: "48px 20px", textAlign: "center",
+          color: "#94a3b8", fontSize: 13,
+        }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>⚠</div>
+          Could not load the PDF. The document may not be available for this period.
+        </div>
+      ) : (
+        <iframe
+          src={pdfUrl}
+          title={`Call Report PDF – ${bankName} ${period}`}
+          style={{
+            width: "100%",
+            height: "78vh",
+            minHeight: 520,
+            border: "none",
+            display: "block",
+            opacity: loading ? 0 : 1,
+            transition: "opacity 0.3s ease",
+          }}
+          onLoad={handleLoad}
+          onError={handleError}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Bank card: header + period tabs + viewer ──────────────────
+function BankPDFCard({ bankName, periods, accent }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [expanded, setExpanded]   = useState(false);
+
+  return (
     <div style={{
       background: "#fff",
       border: "1px solid #e2e8f0",
       borderRadius: 14,
       overflow: "hidden",
-      marginBottom: 16,
-      boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+      marginBottom: 20,
+      boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
     }}>
-      {/* Card header -same style as Overview/Metrics/Sections */}
-      <div style={{ background: accent, padding: "16px 20px" }}>
+      {/* Card header — clickable to expand/collapse */}
+      <div
+        onClick={() => setExpanded(o => !o)}
+        style={{ background: accent, padding: "16px 20px", cursor: "pointer", userSelect: "none" }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <BankLogo bankName={bankName} size={22} />
+          <BankLogo bankName={bankName} size={24} />
           <div style={{ flex: 1 }}>
             <div style={{
               fontSize: 12, fontWeight: 800, color: "#fff",
-              textTransform: "uppercase", letterSpacing: 0.4,
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              textTransform: "uppercase", letterSpacing: 0.5,
             }}>
               {bankName}
             </div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "rgba(255,255,255,0.5)", flexShrink: 0 }} />
-              {period}
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 2 }}>
+              FFIEC Call Report · {periods.length} period{periods.length > 1 ? "s" : ""}
             </div>
           </div>
-
-          {/* Status badge */}
-          {loaded && (
-            <span style={{
-              fontSize: 10, fontWeight: 600, color: "#fff",
-              background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.3)",
-              padding: "3px 10px", borderRadius: 99,
-            }}>
-              PDF Ready
-            </span>
-          )}
-          {error && (
-            <span style={{
-              fontSize: 10, fontWeight: 600, color: "#fff",
-              background: "rgba(239,68,68,0.4)", border: "1px solid rgba(239,68,68,0.5)",
-              padding: "3px 10px", borderRadius: 99,
-            }}>
-              Failed to load
-            </span>
-          )}
+          {/* Chevron */}
+          <div style={{
+            width: 24, height: 24, borderRadius: "50%", flexShrink: 0,
+            background: "rgba(255,255,255,0.2)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 9, color: "#fff",
+            transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.2s ease",
+          }}>▼</div>
         </div>
       </div>
 
-      {/* Expand / collapse row */}
-      <div
-        onClick={handleExpand}
-        style={{
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "11px 20px",
+      {/* Tabs + viewer — only shown when expanded */}
+      {expanded && periods.length > 1 && (
+        <div style={{
+          display: "flex",
+          borderBottom: "1px solid #e2e8f0",
           background: "#f8fafc",
-          borderBottom: expanded ? "1px solid #e2e8f0" : "none",
-          cursor: "pointer", userSelect: "none",
-        }}
-      >
-        <div style={{
-          width: 28, height: 28, borderRadius: 7, flexShrink: 0,
-          background: expanded ? accent : accent + "15",
-          color: expanded ? "#fff" : accent,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 13, transition: "all 0.15s",
+          overflowX: "auto",
         }}>
-          ⎙
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>
-            FFIEC Call Report · {period}
-          </div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>
-            {loaded ? "PDF document ready to view" : expanded ? "Loading PDF…" : "Click to open PDF viewer"}
-          </div>
-        </div>
-
-        {/* Progress bar while loading */}
-        {loading && (
-          <div style={{ flex: 1, maxWidth: 140 }}>
-            <div style={{ height: 4, background: "#e2e8f0", borderRadius: 99, overflow: "hidden" }}>
-              <div style={{
-                height: "100%", width: progress + "%",
-                background: `linear-gradient(90deg, ${accent}, ${accent}bb)`,
-                borderRadius: 99, transition: "width 0.3s ease",
-              }} />
-            </div>
-            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 3, textAlign: "right" }}>
-              {progress}%
-            </div>
-          </div>
-        )}
-
-        <div style={{
-          width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
-          background: expanded ? accent : "#e2e8f0",
-          color: expanded ? "#fff" : "#64748b",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 8, fontWeight: 700, transition: "all 0.15s",
-        }}>
-          {expanded ? "▲" : "▼"}
-        </div>
-      </div>
-
-      {/* PDF iframe -shown when expanded */}
-      {expanded && (
-        <div style={{ position: "relative" }}>
-          {/* Loading overlay */}
-          {loading && (
-            <div style={{
-              position: "absolute", inset: 0, zIndex: 2,
-              background: "#f8fafc",
-              display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center", gap: 16,
-              minHeight: 300,
-            }}>
-              <div style={{
-                width: 36, height: 36,
-                border: "3px solid #e2e8f0",
-                borderTopColor: accent,
-                borderRadius: "50%",
-                animation: "spin 0.8s linear infinite",
-              }} />
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-                  Loading PDF…
-                </div>
-                {/* Full-width progress bar */}
-                <div style={{ width: 240, height: 6, background: "#e2e8f0", borderRadius: 99, overflow: "hidden" }}>
-                  <div style={{
-                    height: "100%", width: progress + "%",
-                    background: `linear-gradient(90deg, ${accent}, ${accent}99)`,
-                    borderRadius: 99, transition: "width 0.3s ease",
-                  }} />
-                </div>
-                <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 5 }}>
-                  {progress}% · Pages rendering in browser
-                </div>
-              </div>
-            </div>
-          )}
-
-          {error ? (
-            <div style={{
-              padding: "32px 20px", textAlign: "center",
-              color: "#94a3b8", fontSize: 13,
-            }}>
-              <div style={{ fontSize: 24, marginBottom: 8 }}>⚠</div>
-              Could not load the PDF. The document may not be available for this period.
-            </div>
-          ) : (
-            <iframe
-              src={pdfUrl}
-              title={`Call Report PDF -${bankName} ${period}`}
+          {periods.map((p, i) => (
+            <button
+              key={p.period}
+              onClick={() => setActiveIdx(i)}
               style={{
-                width: "100%",
-                height: "75vh",
-                minHeight: 500,
+                padding: "10px 20px",
+                fontSize: 12,
+                fontWeight: activeIdx === i ? 700 : 500,
+                color: activeIdx === i ? accent : "#64748b",
+                background: "transparent",
                 border: "none",
-                display: "block",
-                opacity: loading ? 0 : 1,
-                transition: "opacity 0.3s ease",
+                borderBottom: activeIdx === i ? `2px solid ${accent}` : "2px solid transparent",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "all 0.15s",
+                marginBottom: -1,
               }}
-              onLoad={handleLoad}
-              onError={handleError}
-            />
-          )}
+            >
+              {p.period}
+            </button>
+          ))}
         </div>
       )}
+
+      {/* PDF viewer — display:none preserves loaded state across tab switches */}
+      {expanded && periods.map((p, i) => (
+        <div key={p.period} style={{ display: activeIdx === i ? "block" : "none" }}>
+          <PDFViewer
+            pdfUrl={p.pdfUrl}
+            bankName={bankName}
+            period={p.period}
+            accent={accent}
+          />
+        </div>
+      ))}
     </div>
   );
 }
@@ -248,33 +226,43 @@ export default function PDFPage({ reports }) {
     );
   }
 
-  const uniqueBanks   = [...new Set(list.map(r => r.bankName))].length;
+  // Group by bank name, preserve insertion order
+  const bankMap = new Map();
+  list.forEach(r => {
+    if (!bankMap.has(r.bankName)) bankMap.set(r.bankName, []);
+    bankMap.get(r.bankName).push({ period: r.period, pdfUrl: r.pdfUrl });
+  });
+  const banks = Array.from(bankMap.entries()); // [[bankName, periods[]], ...]
+
+  const uniqueBanks   = banks.length;
   const uniquePeriods = [...new Set(list.map(r => r.period))].length;
 
   return (
-    <div>
+    // ⚠ No overflow:hidden, no fixed height — let content grow naturally
+    <div style={{ minHeight: 0 }}>
+      {/* Summary row */}
       <div style={{ marginBottom: 20, display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.5px" }}>
-          {list.length === 1 ? list[0].bankName : `${list.length} PDF Reports`}
+          {uniqueBanks === 1 ? banks[0][0] : `${list.length} PDF Reports`}
         </div>
         <div style={{ fontSize: 12, color: "#94a3b8" }}>
-          {list.length === 1
-            ? list[0].period
+          {uniqueBanks === 1
+            ? `${uniquePeriods} period${uniquePeriods > 1 ? "s" : ""}`
             : `${uniqueBanks} bank${uniqueBanks > 1 ? "s" : ""} · ${uniquePeriods} period${uniquePeriods > 1 ? "s" : ""}`}
         </div>
-        {list.length > 1 && (
+        {uniqueBanks > 1 && (
           <div style={{ marginLeft: "auto", fontSize: 11, color: "#64748b", background: "#f1f5f9", padding: "3px 10px", borderRadius: 99 }}>
-            Click any card to open its PDF
+            Click period tabs to switch PDF
           </div>
         )}
       </div>
 
-      {list.map((report, i) => (
-        <PDFCard
-          key={report.bankName + "::" + report.period}
-          pdfUrl={report.pdfUrl}
-          bankName={report.bankName}
-          period={report.period}
+      {/* One card per bank */}
+      {banks.map(([bankName, periods], i) => (
+        <BankPDFCard
+          key={bankName}
+          bankName={bankName}
+          periods={periods}
           accent={CARD_ACCENTS[i % CARD_ACCENTS.length]}
         />
       ))}

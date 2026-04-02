@@ -870,14 +870,29 @@ export default function CustomReport({ selectedBanks, selectedPeriods, banksById
     setLoadingCatalog(true); setCatalogError(null);
     try {
       const combos  = bankIds.flatMap(rssdId => periods.map(period => ({ rssdId, period })));
-      const results = await Promise.all(combos.map(({rssdId, period}) =>
+      const results = await Promise.allSettled(combos.map(({rssdId, period}) =>
         fetchAllFields(rssdId, period).then(d => ({
           key: String(rssdId)+"::"+period,
           data: {...d, rssdId, period, bankName:(banksById||{})[rssdId]?.Name||String(rssdId)},
         }))
       ));
-      const map = {}; results.forEach(({key,data}) => { map[key]=data; });
-      setAllCatalogs(map); setCatalogLoaded(true);
+      const map = {};
+      const errors = [];
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled") {
+          map[r.value.key] = r.value.data;
+        } else {
+          const { period } = combos[i];
+          errors.push(`${period}: No filing data available — this period may not yet be filed with FFIEC.`);
+        }
+      });
+      if (Object.keys(map).length > 0) {
+        setAllCatalogs(map);
+        setCatalogLoaded(true);
+      }
+      if (errors.length > 0) {
+        setCatalogError(errors.join(" "));
+      }
     } catch(e) { setCatalogError("Failed to load field catalog: "+e.message); }
     finally { setLoadingCatalog(false); }
   };
