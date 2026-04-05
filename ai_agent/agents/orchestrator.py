@@ -139,7 +139,7 @@ def create_orchestrator(temperature: float = 0.1):
     """
     # Component 1: LLM Initialization with temperature experiment
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-preview-04-17",
+        model="gemini-2.5-flash",
         google_api_key=_get_key(),
         temperature=temperature,
     )
@@ -166,7 +166,7 @@ def create_orchestrator(temperature: float = 0.1):
 # ── Simple monthly request counter ──────────────────────────────────────────
 # Resets when the process restarts. For persistent tracking use a database.
 _request_count = 0
-_MONTHLY_REQUEST_LIMIT = 14_000  # ~$5/month at gemini-2.5-flash-preview-04-17 rates
+_MONTHLY_REQUEST_LIMIT = 14_000  # ~$5/month at gemini-2.5-flash rates
 
 def _check_rate_limit() -> str | None:
     """Returns an error message if monthly limit is reached, else None."""
