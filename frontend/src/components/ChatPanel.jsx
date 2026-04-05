@@ -227,10 +227,10 @@ export default function ChatPanel({
         body: JSON.stringify({
           question: enhancedQuestion,
           rssd_id: primaryEntry?.bank ? String(primaryEntry.bank.ID_RSSD) : null,
-          bank_name: primaryEntry?.bank?.Name || null,
+          bank_name: primaryEntry?.bank?.Name?.trim() || null,
           quarter: primaryEntry?.quarter || null,
           period: primaryEntry?.quarter ? quarterToFFIEC(primaryEntry.quarter) : currentPeriod,
-          available_periods: availablePeriods || [],
+          available_periods: (availablePeriods || []).slice(0, 20),
           thread_id: threadId,
           stream: false,
           // Pass all selected banks as extra context
