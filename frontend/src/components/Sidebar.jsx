@@ -140,7 +140,7 @@ export default function Sidebar({
   };
 
   return (
-    <aside style={{
+    <aside className={`sidebar${collapsed ? " collapsed" : ""}`} style={{
       width: collapsed ? 0 : 272, minWidth: collapsed ? 0 : 272,
       background: WM_GREEN, color: WM_TEXT,
       display:"flex", flexDirection:"column",

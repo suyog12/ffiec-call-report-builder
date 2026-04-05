@@ -398,6 +398,17 @@ export default function App() {
   return (
     <div className="app-shell app-ready">
       {loadingReport && <LoadingOverlay progress={loadProgress} />}
+      {/* Mobile overlay backdrop */}
+      {isMobile && mobileSidebarOpen && (
+        <div
+          onClick={() => setMobileSidebarOpen(false)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+            zIndex: 49,
+          }}
+        />
+      )}
+
       <Sidebar
         collapsed={isMobile ? !mobileSidebarOpen : sidebarCollapsed}
         activeSection={activeSection}

@@ -717,35 +717,39 @@ tr:hover td { background: #fafafa; }
    xl: > 1200px  (desktop/projector)
 */
 
-/* ── Mobile: stack sidebar over content ─────────────────────── */
+/* ── Mobile: drawer sidebar ──────────────────────────────────── */
 @media (max-width: 767px) {
   .app-shell {
     flex-direction: column;
     position: relative;
   }
 
+  /* Sidebar is a fixed drawer on mobile — slides in from left */
   .sidebar {
-    width: 100% !important;
-    min-width: 100% !important;
-    max-height: 56px;
-    overflow: hidden;
-    transition: max-height 0.3s ease;
-    z-index: 100;
-  }
-
-  .sidebar.mobile-open {
-    max-height: 100vh;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    width: 272px !important;
+    min-width: 272px !important;
+    z-index: 50 !important;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
     overflow-y: auto;
+    overflow-x: hidden;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
   }
 
-  .sidebar.collapsed {
-    max-height: 56px;
-    width: 100% !important;
+  /* When NOT collapsed (i.e. open), slide in */
+  .sidebar:not(.collapsed) {
+    transform: translateX(0) !important;
   }
 
+  /* Main content takes full width always on mobile */
   .main-content {
     margin-right: 0 !important;
-    width: 100%;
+    width: 100% !important;
+    margin-left: 0 !important;
   }
 
   .topbar {
