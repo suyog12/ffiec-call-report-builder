@@ -4,7 +4,6 @@ import {
   fetchBanks,
   fetchUBPRRatios,
   fetchUBPRPeerComparison,
-  fetchUBPRTrend,
 } from "../services/api";
 
 import BankSearch        from "../components/ubpr/BankSearch";
@@ -15,7 +14,7 @@ import PeerBenchmarking  from "../components/ubpr/PeerBenchmarking";
 import MultiCompare      from "../components/ubpr/MultiCompare";
 import BuildRatio        from "../components/ubpr/BuildRatio";
 
-import { formatQ, buildTrendByKey } from "../utils/ubprFormatters";
+import { formatQ } from "../utils/ubprFormatters";
 import { WM } from "../theme/colors";
 
 const G      = WM.green;
@@ -45,18 +44,19 @@ function Spinner({ size = 36 }) {
   );
 }
 
-export default function UBPRDashboard() {
-  const [tab, setTab]           = useState("summary");
+export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
+  const [tab, setTab]         = useState("summary");
   const [quarters, setQuarters] = useState([]);
-  const [banks, setBanks]       = useState([]);
-  const [bank, setBank]         = useState(null);
-  const [quarter, setQuarter]   = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState(null);
-  const [ratios, setRatios]     = useState(null);
-  const [peer, setPeer]         = useState(null);
-  const [drill, setDrill]       = useState(null);
-  const [drillLoading, setDrillLoading] = useState(false);
+  const [banks, setBanks]     = useState([]);
+  const [bank, setBank]       = useState(null);
+  const [quarter, setQuarter] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState(null);
+  const [ratios, setRatios]   = useState(null);
+  const [peer, setPeer]       = useState(null);
+  const [drill, setDrill]     = useState(null);
+
+  // Trend is NO LONGER fetched on Load — PerformanceTrends fetches lazily
 
   useEffect(() => {
     fetchUBPRQuarters()
@@ -64,6 +64,7 @@ export default function UBPRDashboard() {
         const qs = (d.quarters || []).slice().reverse();
         setQuarters(qs);
         if (qs.length > 0) setQuarter(qs[0]);
+        onQuartersLoaded?.(qs);  // notify App.jsx
       })
       .catch(() => {});
   }, []);
@@ -76,6 +77,7 @@ export default function UBPRDashboard() {
       .catch(() => setBanks([]));
   }, [quarter]);
 
+  // Load only fetches ratios + peer — fast, always needed
   const handleLoad = useCallback(async () => {
     if (!bank || !quarter) return;
     setLoading(true);
@@ -91,6 +93,7 @@ export default function UBPRDashboard() {
       ]);
       setRatios(r);
       setPeer(p);
+      onBankLoaded?.(bank, quarter);  // notify App.jsx for chat context
     } catch (e) {
       setError(e.message || "Failed to load data. Check the backend connection.");
     } finally {
@@ -98,80 +101,34 @@ export default function UBPRDashboard() {
     }
   }, [bank, quarter]);
 
-  /**
-   * When user clicks a ratio card on Executive Summary:
-   * Fetch the 8-quarter trend for just that one code, then open the drill-down modal.
-   */
-  const handleRatioClick = useCallback(async ({ ratio }) => {
-    if (!bank || !quarter) return;
-    setDrillLoading(true);
-    setDrill({ ratio, trendData: [] }); // open modal immediately with spinner
-
-    try {
-      const rssd = String(bank.ID_RSSD);
-      // Default to 8 quarters back from selected quarter
-      const qIdx   = quarters.indexOf(quarter);
-      const fromQ  = quarters[Math.min(qIdx + 7, quarters.length - 1)] || quarters[quarters.length - 1];
-      const toQ    = quarter;
-      const data   = await fetchUBPRTrend(rssd, fromQ, toQ, [ratio.key]);
-      const byKey  = buildTrendByKey(data);
-      const points = byKey[ratio.key] || [];
-      setDrill({ ratio, trendData: points });
-    } catch (e) {
-      console.error("Drill-down trend fetch failed:", e);
-      setDrill(prev => prev ? { ...prev, trendData: [] } : null);
-    } finally {
-      setDrillLoading(false);
-    }
-  }, [bank, quarter, quarters]);
-
   const showSelector = TABS_WITH_SELECTOR.has(tab);
   const bankName     = String(bank?.Name || "").trim();
 
   return (
     <div style={{ padding: "24px 28px", background: BG, minHeight: "100%", fontFamily: "system-ui, sans-serif" }}>
 
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
-          <div style={{
-            width: 4, height: 36, background: G, borderRadius: 2, flexShrink: 0,
-          }} />
-          <div>
-            <div style={{
-              fontFamily: "Georgia, 'Times New Roman', serif",
-              fontSize: 26, fontWeight: 700, color: TEXT, letterSpacing: "-0.3px", lineHeight: 1.1,
-            }}>
-              Financial Analysis
-            </div>
-            <div style={{ fontSize: 11, color: MUTED, marginTop: 3, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 500 }}>
-              Uniform Bank Performance Report
-            </div>
-          </div>
-        </div>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: TEXT, letterSpacing: "-0.3px" }}>Financial Analysis</div>
+        <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>Uniform Bank Performance Report · Cloudflare R2 + DuckDB</div>
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: "flex", borderBottom: `2px solid ${BORDER}`, marginBottom: 24, gap: 2 }}>
+      <div style={{ display: "flex", borderBottom: `2px solid ${BORDER}`, marginBottom: 24 }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            padding: "10px 22px", fontSize: 13,
-            fontFamily: tab === t.id ? "Georgia, 'Times New Roman', serif" : "system-ui, sans-serif",
-            fontWeight: tab === t.id ? 700 : 400,
-            fontStyle: tab === t.id ? "italic" : "normal",
+            padding: "10px 20px", fontSize: 13,
+            fontWeight: tab === t.id ? 700 : 500,
             color: tab === t.id ? G : MUTED,
-            background: tab === t.id ? "rgba(17,87,64,0.04)" : "transparent",
-            border: "none",
+            background: "transparent", border: "none",
             borderBottom: tab === t.id ? `2px solid ${G}` : "2px solid transparent",
-            borderRadius: "6px 6px 0 0",
-            cursor: "pointer", marginBottom: -2, transition: "all 0.15s",
-            letterSpacing: tab === t.id ? "0.01em" : 0,
+            cursor: "pointer", marginBottom: -2, transition: "color 0.15s",
           }}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* Institution selector */}
+      {/* Institution selector — only on summary + peers */}
       {showSelector && (
         <div style={{ background: "#fff", borderRadius: 12, padding: 20, marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 160px 140px", gap: 14, alignItems: "end" }}>
@@ -225,10 +182,11 @@ export default function UBPRDashboard() {
         <>
           {tab === "summary" && (
             ratios
-              ? <ExecutiveSummary bank={bank} quarter={quarter} ratioData={ratios} peerData={peer} onRatioClick={handleRatioClick} />
+              ? <ExecutiveSummary bank={bank} quarter={quarter} ratioData={ratios} peerData={peer} onRatioClick={setDrill} />
               : !error && <EmptyState />
           )}
 
+          {/* Trends is always mounted when bank is set — manages its own data */}
           <div style={{ display: tab === "trends" ? "block" : "none" }}>
             {bank
               ? <PerformanceTrends bank={bank} quarters={quarters} banks={banks} />
@@ -250,7 +208,6 @@ export default function UBPRDashboard() {
           ratio={drill.ratio}
           trendData={drill.trendData}
           bankName={bankName}
-          loading={drillLoading}
           onClose={() => setDrill(null)}
         />
       )}

@@ -85,6 +85,8 @@ h1,h2,h3,h4 { line-height: 1.2; }
   flex-direction: column;
   min-width: 0;
   background: #f4f6f0;
+  transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
 }
 
 /* ── Top bar ─────────────────────────────────────────────────── */

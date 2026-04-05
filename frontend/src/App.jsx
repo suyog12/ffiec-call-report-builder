@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import Tabs from "./components/Tabs";
+import ChatPanel from "./components/ChatPanel";
 
 import Overview from "./pages/Overview";
 import PDFPage from "./pages/PDFPage";
@@ -13,6 +14,7 @@ import UBPRDashboard from "./pages/UBPRDashboard";
 import {
   fetchBanks, fetchPeriods, fetchMetrics,
   fetchAvailableSections, fetchSectionData, getPdfUrl,
+  fetchUBPRQuarters,
 } from "./services/api";
 
 // ── W&M bookmark SVG ─────────────────────────────────────────
@@ -185,6 +187,10 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("Overview");
   const [activeSection, setActiveSection] = useState("call"); // "call" | "ubpr"
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [ubprQuarters, setUbprQuarters] = useState([]);
+  const [currentUBPRBank, setCurrentUBPRBank] = useState(null);
+  const [currentUBPRQuarter, setCurrentUBPRQuarter] = useState("");
 
   // ── Startup loading state ─────────────────────────────────
   const [splashStatus, setSplashStatus] = useState("Connecting to FFIEC API…");
@@ -234,6 +240,14 @@ export default function App() {
       // Short delay so "Ready" is visible before fade
       await new Promise((r) => setTimeout(r, 300));
       setAppReady(true);
+
+      // Load UBPR quarters in background for chat panel
+      fetchUBPRQuarters()
+        .then(d => {
+          const qs = (d.quarters || []).slice().reverse();
+          setUbprQuarters(qs);
+        })
+        .catch(() => {});
     }
 
     startup();
@@ -397,7 +411,10 @@ export default function App() {
         loading={loadingReport || banksLoading}
       />
 
-      <div className="main-content">
+      {/* Main content shifts left when chat is open */}
+      <div className="main-content" style={{
+        marginRight: chatOpen ? 420 : 0,
+      }}>
         <Header
           bank={activeSection === "ubpr" ? "Financial Analysis" : headerBank}
           period={activeSection === "ubpr" ? "" : headerPeriod}
@@ -408,7 +425,13 @@ export default function App() {
         {/* UBPR mode — full page, no tabs */}
         {activeSection === "ubpr" ? (
           <main className="page-content" style={{ padding: 0 }}>
-            <UBPRDashboard />
+            <UBPRDashboard
+              onBankLoaded={(bank, quarter) => {
+                setCurrentUBPRBank(bank);
+                setCurrentUBPRQuarter(quarter);
+              }}
+              onQuartersLoaded={setUbprQuarters}
+            />
           </main>
         ) : (
           <>
@@ -446,6 +469,55 @@ export default function App() {
           </>
         )}
       </div>
+
+      {/* Floating chat button */}
+      <button
+        onClick={() => setChatOpen(o => !o)}
+        title={chatOpen ? "Close AI Assistant" : "Open AI Assistant"}
+        style={{
+          position: "fixed", bottom: 28, right: chatOpen ? 448 : 28,
+          width: 52, height: 52, borderRadius: "50%",
+          background: chatOpen ? "#fff" : "#115740",
+          color: chatOpen ? "#115740" : "#fff",
+          border: chatOpen ? "2px solid #115740" : "none",
+          boxShadow: "0 4px 20px rgba(17,87,64,0.35)",
+          cursor: "pointer", fontSize: 22, zIndex: 60,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        }}
+      >
+        {chatOpen ? "×" : "✦"}
+      </button>
+
+      {/* Chat Panel */}
+      <ChatPanel
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        quarters={ubprQuarters}
+        banks={banks}
+        currentBank={currentUBPRBank || (selectedBanks.length === 1 ? banksById[selectedBanks[0]] : null)}
+        currentQuarter={currentUBPRQuarter}
+        currentPeriod={selectedPeriods[0] || ""}
+        activeSection={activeSection}
+        availablePeriods={periods}
+        onSwitchSection={(section) => {
+          setActiveSection(section);
+          if (section === "ubpr") setActiveTab("UBPR");
+          else setActiveTab("Overview");
+        }}
+        onLoadUBPR={(rssdId, quarter) => {
+          setActiveSection("ubpr");
+          setActiveTab("UBPR");
+        }}
+        onLoadReport={(rssdId, period, tab) => {
+          setActiveSection("call");
+          const tabMap = {
+            pdf: "PDF", sections: "Sections",
+            metrics: "Metrics", summary: "Overview",
+          };
+          setActiveTab(tabMap[tab] || "Overview");
+        }}
+      />
     </div>
   );
 }
