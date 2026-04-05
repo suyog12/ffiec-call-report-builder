@@ -4,6 +4,7 @@ import {
   fetchBanks,
   fetchUBPRRatios,
   fetchUBPRPeerComparison,
+  fetchUBPRTrend,
 } from "../services/api";
 
 import BankSearch        from "../components/ubpr/BankSearch";
@@ -55,8 +56,9 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
   const [ratios, setRatios]   = useState(null);
   const [peer, setPeer]       = useState(null);
   const [drill, setDrill]     = useState(null);
+  const [drillLoading, setDrillLoading] = useState(false);
 
-  // Trend is NO LONGER fetched on Load - PerformanceTrends fetches lazily
+  // Trend is NO LONGER fetched on Load — PerformanceTrends fetches lazily
 
   useEffect(() => {
     fetchUBPRQuarters()
@@ -77,7 +79,7 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
       .catch(() => setBanks([]));
   }, [quarter]);
 
-  // Load only fetches ratios + peer - fast, always needed
+  // Load only fetches ratios + peer — fast, always needed
   const handleLoad = useCallback(async () => {
     if (!bank || !quarter) return;
     setLoading(true);
@@ -100,6 +102,36 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
       setLoading(false);
     }
   }, [bank, quarter]);
+
+  // Drill-down: fetch 8-quarter trend for a single ratio code
+  const handleRatioClick = useCallback(async ({ ratio }) => {
+    if (!bank || !quarter) return;
+    setDrillLoading(true);
+    setDrill({ ratio, trendData: [] }); // open modal immediately with spinner
+    try {
+      const rssd  = String(bank.ID_RSSD);
+      const qIdx  = quarters.indexOf(quarter);
+      const fromQ = quarters[Math.min(qIdx + 7, quarters.length - 1)] || quarters[quarters.length - 1];
+      const data  = await fetchUBPRTrend(rssd, fromQ, quarter, [ratio.key]);
+      // buildTrendByKey helper
+      const byKey = {};
+      (data.trend || []).forEach(row => {
+        const q = row.quarter_date;
+        Object.entries(row).forEach(([k, v]) => {
+          if (k === "quarter_date") return;
+          if (!byKey[k]) byKey[k] = [];
+          byKey[k].push({ quarter: q, value: v });
+        });
+      });
+      const points = byKey[ratio.key] || [];
+      setDrill({ ratio, trendData: points });
+    } catch (e) {
+      console.error("Drill-down trend fetch failed:", e);
+      setDrill(prev => prev ? { ...prev, trendData: [] } : null);
+    } finally {
+      setDrillLoading(false);
+    }
+  }, [bank, quarter, quarters]);
 
   const showSelector = TABS_WITH_SELECTOR.has(tab);
   const bankName     = String(bank?.Name || "").trim();
@@ -128,7 +160,7 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
         ))}
       </div>
 
-      {/* Institution selector - only on summary + peers */}
+      {/* Institution selector — only on summary + peers */}
       {showSelector && (
         <div style={{ background: "#fff", borderRadius: 12, padding: 20, marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 160px 140px", gap: 14, alignItems: "end" }}>
@@ -182,11 +214,11 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
         <>
           {tab === "summary" && (
             ratios
-              ? <ExecutiveSummary bank={bank} quarter={quarter} ratioData={ratios} peerData={peer} onRatioClick={setDrill} />
+              ? <ExecutiveSummary bank={bank} quarter={quarter} ratioData={ratios} peerData={peer} onRatioClick={handleRatioClick} />
               : !error && <EmptyState />
           )}
 
-          {/* Trends is always mounted when bank is set - manages its own data */}
+          {/* Trends is always mounted when bank is set — manages its own data */}
           <div style={{ display: tab === "trends" ? "block" : "none" }}>
             {bank
               ? <PerformanceTrends bank={bank} quarters={quarters} banks={banks} />
@@ -208,6 +240,7 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
           ratio={drill.ratio}
           trendData={drill.trendData}
           bankName={bankName}
+          loading={drillLoading}
           onClose={() => setDrill(null)}
         />
       )}
