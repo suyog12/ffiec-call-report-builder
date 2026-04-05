@@ -42,7 +42,7 @@ function WMBookmark({ size = 140, opacity = 1 }) {
         stroke="rgba(181,161,106,0.30)"
         strokeWidth="0.8"
       />
-      {/* W&M monogram - W */}
+      {/* W&M monogram — W */}
       <text
         x="50" y="52"
         textAnchor="middle"
@@ -73,7 +73,7 @@ function Splash({ status }) {
     <div className="app-splash">
       <div className="app-splash-inner">
 
-        {/* W&M Bookmark - large, centered, prominent */}
+        {/* W&M Bookmark — large, centered, prominent */}
         <div className="app-splash-bookmark-wrap">
           <WMBookmark size={160} opacity={1} />
         </div>
@@ -188,6 +188,14 @@ export default function App() {
   const [activeSection, setActiveSection] = useState("call"); // "call" | "ubpr"
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
   const [ubprQuarters, setUbprQuarters] = useState([]);
   const [currentUBPRBank, setCurrentUBPRBank] = useState(null);
   const [currentUBPRQuarter, setCurrentUBPRQuarter] = useState("");
@@ -316,13 +324,13 @@ export default function App() {
         const tag  = name.length > 22 ? name.slice(0, 22) + "…" : name;
         try {
           const m = await fetchMetrics(rssdId, period);
-          tick("Metrics - " + tag);
+          tick("Metrics — " + tag);
 
           const s = await fetchAvailableSections(rssdId, period);
-          tick("Schedules - " + tag);
+          tick("Schedules — " + tag);
 
           const sd = await fetchSectionData(rssdId, period, ["RC", "RI"]);
-          tick("Section data - " + tag);
+          tick("Section data — " + tag);
 
           results[key] = {
             rssdId, period,
@@ -335,7 +343,7 @@ export default function App() {
         } catch (e) {
           // Count remaining steps for this combo as done so bar reaches 100%
           const remaining = 3 - (doneSteps % 3 || 3);
-          for (let i = 0; i < remaining; i++) tick("Error - " + tag);
+          for (let i = 0; i < remaining; i++) tick("Error — " + tag);
           results[key] = { rssdId, period, error: e.message };
         }
       })
@@ -361,13 +369,13 @@ export default function App() {
 
   const headerPeriod =
     selectedPeriods.length === 0
-      ? "-"
+      ? "—"
       : selectedPeriods.length === 1
       ? selectedPeriods[0]
       : selectedPeriods.length + " periods";
 
   // ── Persistent tab rendering ─────────────────────────────
-  // All tabs stay mounted (never unmount) - switching just toggles display:none.
+  // All tabs stay mounted (never unmount) — switching just toggles display:none.
   // This preserves all state: PDF loaded, Custom wizard step, Sections expanded, etc.
   const emptyState = (
     <div style={{ padding: "60px 0", textAlign: "center", color: "#94a3b8" }}>
@@ -391,7 +399,7 @@ export default function App() {
     <div className="app-shell app-ready">
       {loadingReport && <LoadingOverlay progress={loadProgress} />}
       <Sidebar
-        collapsed={sidebarCollapsed}
+        collapsed={isMobile ? !mobileSidebarOpen : sidebarCollapsed}
         activeSection={activeSection}
         onSectionChange={(section) => {
           setActiveSection(section);
@@ -413,16 +421,16 @@ export default function App() {
 
       {/* Main content shifts left when chat is open */}
       <div className="main-content" style={{
-        marginRight: chatOpen ? 420 : 0,
+        marginRight: chatOpen && !isMobile ? 420 : 0,
       }}>
         <Header
           bank={activeSection === "ubpr" ? "Financial Analysis" : headerBank}
           period={activeSection === "ubpr" ? "" : headerPeriod}
           sidebarCollapsed={sidebarCollapsed}
-          onToggleSidebar={() => setSidebarCollapsed((c) => !c)}
+          onToggleSidebar={() => isMobile ? setMobileSidebarOpen(o => !o) : setSidebarCollapsed((c) => !c)}
         />
 
-        {/* UBPR mode - full page, no tabs */}
+        {/* UBPR mode — full page, no tabs */}
         {activeSection === "ubpr" ? (
           <main className="page-content" style={{ padding: 0 }}>
             <UBPRDashboard
@@ -442,7 +450,7 @@ export default function App() {
                 {loadedReports.length === 0 ? emptyState : <Overview reports={loadedReports} />}
               </div>
 
-              {/* PDF - always mounted so loaded PDFs don't re-fetch */}
+              {/* PDF — always mounted so loaded PDFs don't re-fetch */}
               <div style={tabContent("PDF")}>
                 {loadedReports.length === 0 ? emptyState : <PDFPage reports={loadedReports} />}
               </div>
@@ -457,7 +465,7 @@ export default function App() {
                 {loadedReports.length === 0 ? emptyState : <Metrics reports={loadedReports} />}
               </div>
 
-              {/* Custom - always mounted so wizard state is never lost */}
+              {/* Custom — always mounted so wizard state is never lost */}
               <div style={tabContent("Custom")}>
                 <CustomReport
                   selectedBanks={selectedBanks}

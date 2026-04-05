@@ -566,7 +566,7 @@ tr:hover td { background: #fafafa; }
   box-shadow: 0 1px 3px rgba(17,87,64,0.06), 0 1px 2px rgba(0,0,0,0.04);
 }
 
-/* ── Splash screen - W&M themed ─────────────────────────────── */
+/* ── Splash screen — W&M themed ─────────────────────────────── */
 .app-splash {
   position: fixed;
   inset: 0;
@@ -706,4 +706,218 @@ tr:hover td { background: #fafafa; }
   font-size: 10px;
   color: rgba(209,232,223,0.45);
   letter-spacing: 0.2px;
+}
+/* ── RESPONSIVE / BOOTSTRAP INTEGRATION ─────────────────────── */
+
+/* Mobile first breakpoints:
+   xs: < 576px   (phone portrait)
+   sm: 576-768px (phone landscape)
+   md: 768-992px (tablet)
+   lg: 992-1200px (laptop)
+   xl: > 1200px  (desktop/projector)
+*/
+
+/* ── Mobile: stack sidebar over content ─────────────────────── */
+@media (max-width: 767px) {
+  .app-shell {
+    flex-direction: column;
+    position: relative;
+  }
+
+  .sidebar {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-height: 56px;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    z-index: 100;
+  }
+
+  .sidebar.mobile-open {
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+
+  .sidebar.collapsed {
+    max-height: 56px;
+    width: 100% !important;
+  }
+
+  .main-content {
+    margin-right: 0 !important;
+    width: 100%;
+  }
+
+  .topbar {
+    padding: 0 12px;
+    height: 48px;
+  }
+
+  .topbar-entity {
+    font-size: 12px;
+    max-width: 160px;
+  }
+
+  .page-content {
+    padding: 12px;
+  }
+
+  .tab-nav {
+    padding: 0 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tab-nav::-webkit-scrollbar { display: none; }
+
+  .tab-btn {
+    padding: 10px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  /* Chat panel full screen on mobile */
+  div[style*="width: 420px"],
+  div[style*="width:420px"] {
+    width: 100% !important;
+    top: 48px !important;
+  }
+
+  /* Floating chat button */
+  button[title*="Assistant"] {
+    width: 44px !important;
+    height: 44px !important;
+    bottom: 16px !important;
+    right: 16px !important;
+  }
+}
+
+/* ── Tablet ──────────────────────────────────────────────────── */
+@media (min-width: 768px) and (max-width: 991px) {
+  .sidebar {
+    width: 220px !important;
+    min-width: 220px !important;
+  }
+
+  .sidebar-inner {
+    width: 220px;
+  }
+
+  .page-content {
+    padding: 16px;
+  }
+
+  .topbar-entity {
+    max-width: 240px;
+  }
+
+  /* Chat panel narrower on tablet */
+  .chat-panel-open .main-content {
+    margin-right: 360px !important;
+  }
+}
+
+/* ── Laptop ──────────────────────────────────────────────────── */
+@media (min-width: 992px) and (max-width: 1199px) {
+  .sidebar {
+    width: 240px !important;
+    min-width: 240px !important;
+  }
+
+  .sidebar-inner {
+    width: 240px;
+  }
+}
+
+/* ── Projector / large screen ────────────────────────────────── */
+@media (min-width: 1400px) {
+  .page-content {
+    padding: 32px 40px;
+  }
+
+  .topbar {
+    height: 64px;
+    padding: 0 32px;
+  }
+
+  body {
+    font-size: 15px;
+  }
+}
+
+/* ── UBPR grid responsive ────────────────────────────────────── */
+@media (max-width: 575px) {
+  .metrics-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .metric-value {
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 576px) and (max-width: 767px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  .metrics-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ── UBPR institution selector responsive ────────────────────── */
+@media (max-width: 767px) {
+  /* Stack institution selector vertically on mobile */
+  [style*="grid-template-columns: 1fr 160px 140px"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+}
+
+/* ── Tables responsive ───────────────────────────────────────── */
+@media (max-width: 767px) {
+  table {
+    font-size: 11px;
+  }
+  th, td {
+    padding: 4px 6px;
+  }
+}
+
+/* ── Cards responsive ────────────────────────────────────────── */
+@media (max-width: 575px) {
+  .card {
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+}
+
+/* ── Sidebar logo responsive ─────────────────────────────────── */
+@media (max-width: 767px) {
+  .sidebar-logo {
+    height: 56px;
+    padding: 0 16px;
+  }
+}
+
+/* ── Print / projector mode ──────────────────────────────────── */
+@media print {
+  .sidebar,
+  .topbar-toggle,
+  .tab-nav,
+  button {
+    display: none !important;
+  }
+
+  .main-content {
+    margin: 0 !important;
+  }
+
+  .page-content {
+    padding: 0 !important;
+  }
 }
