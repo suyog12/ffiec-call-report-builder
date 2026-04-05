@@ -1,7 +1,7 @@
 import { CARD_ACCENTS } from "../theme/colors.js";
 
-function fmtNum(v) { if (v === null || v === undefined) return "—"; return v.toLocaleString("en-US", { maximumFractionDigits: 0 }); }
-function fmtPct(v) { if (v === null || v === undefined) return "—"; return (v * 100).toFixed(2) + "%"; }
+function fmtNum(v) { if (v === null || v === undefined) return "-"; return v.toLocaleString("en-US", { maximumFractionDigits: 0 }); }
+function fmtPct(v) { if (v === null || v === undefined) return "-"; return (v * 100).toFixed(2) + "%"; }
 
 function BankLogo({ bankName, size = 22 }) {
   const clean = bankName.toLowerCase().replace(/[',\.&]/g," ").replace(/\b(national|association|inc|corp|corporation|trust|financial|savings|community|federal|na|fsb|ssb|bancorp|bancshares|holding|holdings|group|co|company|ltd|llc|of|the|and|dba)\b/g,"").replace(/\s+/g," ").trim();
@@ -93,7 +93,7 @@ function BankMetricsCard({ bankName, reports, accent }) {
                 {reports.map(r => {
                   const val = (r.metrics || {})[key];
                   const formatted = meta.fmt(val);
-                  const isMissing = formatted === "—";
+                  const isMissing = formatted === "-";
                   const isNeg = typeof val === "number" && val < 0;
                   return (
                     <div key={r.period} style={{ padding:"10px 14px", display:"flex", alignItems:"center", justifyContent:"flex-end", borderLeft:"1px solid #f1f5f9" }}>

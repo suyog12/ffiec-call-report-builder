@@ -94,7 +94,7 @@ export async function fetchUBPRAllFields(rssdId, quarterDate) {
 
 /**
  * Fetch trend data for specific metric codes across a quarter range.
- * Only fetches the exact columns the user selected — fast columnar pushdown.
+ * Only fetches the exact columns the user selected - fast columnar pushdown.
  *
  * @param {string} rssdId
  * @param {string} fromQuarter - YYYYMMDD

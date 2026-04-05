@@ -13,9 +13,9 @@ Expected outputs for each example input category.
 Based on UBPR data for Q4 2025 (RSSD: 480228):
 
 Bank of America's capital position:
-• CET1 Ratio (UBPRD487): 12.47% — WELL-CAPITALIZED (min: 4.5%, well-cap: 8%)
-• Total Capital Ratio (UBPRD488): 13.51% — WELL-CAPITALIZED (min: 8%, well-cap: 10%)
-• Leverage Ratio (UBPRD486): 7.36% — WELL-CAPITALIZED (min: 4%, well-cap: 5%)
+• CET1 Ratio (UBPRD487): 12.47% - WELL-CAPITALIZED (min: 4.5%, well-cap: 8%)
+• Total Capital Ratio (UBPRD488): 13.51% - WELL-CAPITALIZED (min: 8%, well-cap: 10%)
+• Leverage Ratio (UBPRD486): 7.36% - WELL-CAPITALIZED (min: 4%, well-cap: 5%)
 
 Bank of America is well-capitalized across all three regulatory measures. 
 Their CET1 ratio of 12.47% exceeds the well-capitalized threshold by 4.47 
@@ -56,9 +56,9 @@ Ratios:
 • Loans-to-Deposits:   46.02%
 
 I've loaded the Q3 2025 report in the dashboard. You can navigate to:
-• PDF tab — view the original filing facsimile
-• Sections tab — explore Schedule RC (Balance Sheet) and RI (Income)
-• Metrics tab — see all computed financial metrics
+• PDF tab - view the original filing facsimile
+• Sections tab - explore Schedule RC (Balance Sheet) and RI (Income)
+• Metrics tab - see all computed financial metrics
 ```
 
 **Dashboard action triggered:**
@@ -79,7 +79,7 @@ I've loaded the Q3 2025 report in the dashboard. You can navigate to:
 
 **Expected output:**
 ```
-Q1 2026 (3/31/2026) has not yet been filed with the FFIEC — 
+Q1 2026 (3/31/2026) has not yet been filed with the FFIEC - 
 quarterly filings are typically submitted 30-60 days after quarter-end.
 
 The nearest available period is Q4 2025 (12/31/2025). 

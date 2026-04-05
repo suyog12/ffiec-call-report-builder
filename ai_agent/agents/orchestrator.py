@@ -19,7 +19,7 @@ from memory.checkpointer import get_checkpointer
 # Read key dynamically at call time so env changes take effect
 def _get_key(): return os.getenv("GEMINI_API_KEY", "")
 
-# Shared context — set by the dashboard before each conversation
+# Shared context - set by the dashboard before each conversation
 _session_context = {
     "rssd_id": None,
     "bank_name": None,
@@ -103,19 +103,19 @@ ORCHESTRATOR_SYSTEM_PROMPT = """You are the master orchestrator for the FFIEC Ca
 built by William & Mary MSBA Team 9, Class of 2026.
 
 This dashboard analyzes U.S. bank financial data from two sources:
-1. FFIEC Call Reports — quarterly regulatory filings with balance sheets, income statements, loan data
-2. UBPR (Uniform Bank Performance Reports) — pre-calculated financial ratios and peer comparisons
+1. FFIEC Call Reports - quarterly regulatory filings with balance sheets, income statements, loan data
+2. UBPR (Uniform Bank Performance Reports) - pre-calculated financial ratios and peer comparisons
 
 Your job is to:
 1. Understand what the user is asking
-2. The message will contain [Context: ...] with bank name, RSSD ID and quarter — ALWAYS use this context, never ask the user for information already provided
+2. The message will contain [Context: ...] with bank name, RSSD ID and quarter - ALWAYS use this context, never ask the user for information already provided
 3. Route to the correct sub-agent:
    - Use analyze_financial_performance() for: ratios, ROA, ROE, NIM, capital, peer comparison, regulatory status, trends, CET1, leverage
    - Use analyze_call_report() for: balance sheet, income, loans, deposits, specific schedule data, loading a report period
 4. Synthesize the response clearly
 5. NEVER ask the user to provide the bank name, RSSD ID, or quarter if already in the context
 
-IMPORTANT — Out of scope handling:
+IMPORTANT - Out of scope handling:
 If the user asks about ANYTHING not related to bank financial analysis, Call Reports, or UBPR data,
 respond ONLY with this exact message:
 "I'm specialized in FFIEC bank financial analysis and cannot help with that. 

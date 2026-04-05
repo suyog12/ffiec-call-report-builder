@@ -2,7 +2,7 @@
 call_report_agent.py
 
 Component 2: Call Report Sub-Agent.
-Specializes in answering questions about FFIEC Call Report filings —
+Specializes in answering questions about FFIEC Call Report filings -
 balance sheets, income statements, loan schedules, and PDF reports.
 """
 

@@ -97,7 +97,7 @@ function SyncScrollTable({ children, tableWidth, accentColor }) {
 
   return (
     <div>
-      {/* Top scroll rail — styled as a deliberate UI strip, not a naked scrollbar */}
+      {/* Top scroll rail - styled as a deliberate UI strip, not a naked scrollbar */}
       <div style={{ background: col + "18", borderBottom: "1px solid " + col + "30", padding:"4px 0" }}>
         <div style={{ display:"flex", alignItems:"center", gap:8, padding:"0 16px 2px" }}>
           <span style={{ fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:1, color: col, opacity:0.7, flexShrink:0 }}>scroll</span>
@@ -113,7 +113,7 @@ function SyncScrollTable({ children, tableWidth, accentColor }) {
         </div>
       </div>
 
-      {/* Table — bottom scrollbar suppressed so top rail is the only one */}
+      {/* Table - bottom scrollbar suppressed so top rail is the only one */}
       <style>{`.ffiec-body-scroll::-webkit-scrollbar{display:none}`}</style>
       <div
         ref={bodyRef}
@@ -130,7 +130,7 @@ function SyncScrollTable({ children, tableWidth, accentColor }) {
 // ─── helpers ──────────────────────────────────────────────────
 function fmt(v) {
   const n = parseFloat(String(v ?? "").replace(/,/g, ""));
-  if (isNaN(n)) return String(v ?? "") || "—";
+  if (isNaN(n)) return String(v ?? "") || "-";
   return n.toLocaleString("en-US");
 }
 
@@ -394,7 +394,7 @@ function StepCard({ title, subtitle, accent = "#115740", children }) {
 // ─── Step 1: Schedules ────────────────────────────────────────
 function StepSections({ availableSections, selectedSections, onToggle }) {
   // Group by known families; unrecognised schedules go to Other.
-  // No hardcoded fallback — all data comes from the API.
+  // No hardcoded fallback - all data comes from the API.
   const BALANCE_SHEET = new Set(["RC","RC-C","RC-B","RC-D","RC-E","RC-F","RC-G","RC-H","RC-K","RC-L","RC-M","RC-N","RC-O","RC-P","RC-Q","RC-R","RC-S","RC-T","RC-U","RC-V"]);
   const INCOME = new Set(["RI","RIA","RIB","RIBI","RIBII","RIC","RID","RIE"]);
 
@@ -409,7 +409,7 @@ function StepSections({ availableSections, selectedSections, onToggle }) {
     return (
       <StepCard title="Select Schedules" subtitle="No schedules found. Make sure reports are loaded." accent="#115740">
         <div style={{ textAlign:"center", color:"#94a3b8", fontSize:13, padding:"20px 0" }}>
-          No schedules available — ensure a bank and period are loaded first.
+          No schedules available - ensure a bank and period are loaded first.
         </div>
       </StepCard>
     );
@@ -418,7 +418,7 @@ function StepSections({ availableSections, selectedSections, onToggle }) {
   return (
     <StepCard
       title="Select Schedules"
-      subtitle={availableSections.length + " schedules available from the FFIEC filing — choose which to include."}
+      subtitle={availableSections.length + " schedules available from the FFIEC filing - choose which to include."}
       accent="#115740"
     >
       {Object.entries(grouped).map(([group, sections]) => {
@@ -594,7 +594,7 @@ function StepBanks({ banks, selectedBankIds, allCatalogs, selectedFieldIds, bank
   }
 
   return (
-    <StepCard title="Field Matching" subtitle={`${selectedFieldIds.size} fields will be applied to all banks. Missing fields show as —.`} accent="#115740">
+    <StepCard title="Field Matching" subtitle={`${selectedFieldIds.size} fields will be applied to all banks. Missing fields show as -.`} accent="#115740">
       {selectedBankIds.map((rssdId, bi) => {
         const bank  = banks[rssdId];
         const st    = bankStatus[rssdId] || {};
@@ -677,7 +677,7 @@ function StepPreview({ allCatalogs, selectedBankIds, selectedPeriods, selectedFi
     return data;
   }, [allCatalogs, selectedBankIds, selectedPeriods, selectedFieldIds, bankFieldOverrides, banks, isMultiBank, isMultiPeriod]);
 
-  // Always collect column keys — even single bank/period gets a "Value" column
+  // Always collect column keys - even single bank/period gets a "Value" column
   const colKeys = useMemo(() => {
     const keys = new Set();
     for (const section of Object.values(pivoted))
@@ -710,7 +710,7 @@ function StepPreview({ allCatalogs, selectedBankIds, selectedPeriods, selectedFi
       }
       html += "</tbody></table>";
     }
-    triggerPrint(html, "FFIEC Custom Report — "+bankLabel);
+    triggerPrint(html, "FFIEC Custom Report - "+bankLabel);
   };
   const handleCSV = () => {
     const headers = ["Section","Item Code","Description",...colKeys.map(k=>k.replace("\n"," · "))];
@@ -783,7 +783,7 @@ function StepPreview({ allCatalogs, selectedBankIds, selectedPeriods, selectedFi
               </div>
             </div>
 
-            {/* Table — only shown when expanded */}
+            {/* Table - only shown when expanded */}
             {sectionOpen && (() => {
               const dataCols = Math.max(colKeys.length, 1);
               const minW     = 110 + 260 + dataCols * 160;
@@ -828,7 +828,7 @@ function StepPreview({ allCatalogs, selectedBankIds, selectedPeriods, selectedFi
                         {colKeys.length > 0
                           ? colKeys.map(k => (
                               <td key={k} style={{ padding:"7px 14px", textAlign:"right", fontFamily:"monospace", fontSize:13, fontWeight:600, color:row.values[k]!==undefined?"#0f172a":"#cbd5e1", borderBottom:"1px solid #f8fafc", whiteSpace:"nowrap" }}>
-                                {row.values[k]!==undefined ? fmt(row.values[k]) : "—"}
+                                {row.values[k]!==undefined ? fmt(row.values[k]) : "-"}
                               </td>
                             ))
                           : <td style={{ padding:"7px 14px", textAlign:"right", fontFamily:"monospace", fontSize:13, fontWeight:600, color:"#0f172a", borderBottom:"1px solid #f8fafc", whiteSpace:"nowrap" }}>
@@ -883,7 +883,7 @@ export default function CustomReport({ selectedBanks, selectedPeriods, banksById
           map[r.value.key] = r.value.data;
         } else {
           const { period } = combos[i];
-          errors.push(`${period}: No filing data available — this period may not yet be filed with FFIEC.`);
+          errors.push(`${period}: No filing data available - this period may not yet be filed with FFIEC.`);
         }
       });
       if (Object.keys(map).length > 0) {
@@ -924,7 +924,7 @@ export default function CustomReport({ selectedBanks, selectedPeriods, banksById
   });
 
   // Load catalog on mount or when bank/period combo changes.
-  // catalogLoaded persists in component state — if the combo hasn't changed,
+  // catalogLoaded persists in component state - if the combo hasn't changed,
   // we skip the fetch. Since React re-mounts this component on tab switch,
   // we track the loaded combo in a ref to avoid redundant fetches.
   const loadedComboRef = React.useRef("");
@@ -970,7 +970,7 @@ export default function CustomReport({ selectedBanks, selectedPeriods, banksById
 
       {catalogError && <div style={{ padding:"10px 14px", background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:8, color:"#dc2626", fontSize:13, marginBottom:16 }}>{catalogError}</div>}
 
-      {/* Step 0 — show spinner while catalog loads, then real sections from API */}
+      {/* Step 0 - show spinner while catalog loads, then real sections from API */}
       {step===0 && (
         loadingCatalog ? (
           <div style={{ padding:"40px 0", textAlign:"center", color:"#94a3b8", fontSize:14 }}>

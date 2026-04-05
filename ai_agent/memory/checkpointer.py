@@ -2,7 +2,7 @@
 checkpointer.py
 
 Component 7: Agent Memory using LangGraph InMemorySaver.
-Enables agents to remember context across conversation turns —
+Enables agents to remember context across conversation turns -
 which bank is selected, which period, previous questions asked.
 """
 

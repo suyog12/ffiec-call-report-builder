@@ -1,11 +1,11 @@
 import { CARD_ACCENTS } from "../theme/colors.js";
 
 function fmtNum(v) {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "-";
   return v.toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
 function fmtPct(v) {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "-";
   return (v * 100).toFixed(2) + "%";
 }
 
@@ -68,7 +68,7 @@ function PeriodRow({ report, accent, isLast }) {
             borderRight: i < 3 ? "1px solid #f0f4ee" : "none",
           }}>
             <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, color: "#94a3b8", marginBottom: 3 }}>{label}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "monospace", color: value === "—" ? "#cbd5e1" : "#0f172a", letterSpacing: "-0.5px" }}>{value}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "monospace", color: value === "-" ? "#cbd5e1" : "#0f172a", letterSpacing: "-0.5px" }}>{value}</div>
           </div>
         ))}
       </div>
@@ -79,7 +79,7 @@ function PeriodRow({ report, accent, isLast }) {
             borderRight: i < 3 ? "1px solid #f0f4ee" : "none",
           }}>
             <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, color: "#94a3b8", marginBottom: 3 }}>{label}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "monospace", color: value === "—" ? "#cbd5e1" : accent, letterSpacing: "-0.5px" }}>{value}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "monospace", color: value === "-" ? "#cbd5e1" : accent, letterSpacing: "-0.5px" }}>{value}</div>
           </div>
         ))}
       </div>

@@ -136,7 +136,7 @@ function BankPDFCard({ bankName, periods, accent }) {
       marginBottom: 20,
       boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
     }}>
-      {/* Card header — clickable to expand/collapse */}
+      {/* Card header - clickable to expand/collapse */}
       <div
         onClick={() => setExpanded(o => !o)}
         style={{ background: accent, padding: "16px 20px", cursor: "pointer", userSelect: "none" }}
@@ -166,7 +166,7 @@ function BankPDFCard({ bankName, periods, accent }) {
         </div>
       </div>
 
-      {/* Tabs + viewer — only shown when expanded */}
+      {/* Tabs + viewer - only shown when expanded */}
       {expanded && periods.length > 1 && (
         <div style={{
           display: "flex",
@@ -198,7 +198,7 @@ function BankPDFCard({ bankName, periods, accent }) {
         </div>
       )}
 
-      {/* PDF viewer — display:none preserves loaded state across tab switches */}
+      {/* PDF viewer - display:none preserves loaded state across tab switches */}
       {expanded && periods.map((p, i) => (
         <div key={p.period} style={{ display: activeIdx === i ? "block" : "none" }}>
           <PDFViewer
@@ -238,7 +238,7 @@ export default function PDFPage({ reports }) {
   const uniquePeriods = [...new Set(list.map(r => r.period))].length;
 
   return (
-    // ⚠ No overflow:hidden, no fixed height — let content grow naturally
+    // ⚠ No overflow:hidden, no fixed height - let content grow naturally
     <div style={{ minHeight: 0 }}>
       {/* Summary row */}
       <div style={{ marginBottom: 20, display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>

@@ -25,7 +25,7 @@ export default function RatioCard({ ratio, value, trendData, peerAvg, onClick })
   const regStatus = getRegulatoryStatus(ratio.key, value);
   const catColor  = CATEGORY_COLORS[ratio.category] || G;
 
-  // Mini sparkline — last 4 quarters in chronological order
+  // Mini sparkline - last 4 quarters in chronological order
   const sparkVals = vals.slice(0, 4).reverse();
   const sparkMin  = Math.min(...sparkVals);
   const sparkMax  = Math.max(...sparkVals);
@@ -83,7 +83,7 @@ export default function RatioCard({ ratio, value, trendData, peerAvg, onClick })
         </div>
       )}
 
-      {/* Regulatory alert badge — only shown when not healthy */}
+      {/* Regulatory alert badge - only shown when not healthy */}
       {regStatus && regStatus.status !== "healthy" && (
         <div style={{
           display: "inline-block", fontSize: 10, fontWeight: 700,

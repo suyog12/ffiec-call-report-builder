@@ -250,7 +250,7 @@ export default function ChatPanel({
 
     } catch (e) {
       addMessage("assistant",
-        "⚠️ Failed to connect to the AI assistant. Please check that the backend is running."
+        "Failed to connect to the AI assistant. Please check that the backend is running."
       );
     } finally {
       setLoading(false);

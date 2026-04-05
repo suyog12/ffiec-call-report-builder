@@ -57,8 +57,8 @@ export default function Header({ bank, period, sidebarCollapsed, onToggleSidebar
         {bank || "Select a Bank"}
       </span>
 
-      {/* Period badge — only for call report (not UBPR) */}
-      {period && period !== "—" && (
+      {/* Period badge - only for call report (not UBPR) */}
+      {period && period !== "-" && (
         <span style={{
           fontSize: 11,
           color: "#5a7a68",

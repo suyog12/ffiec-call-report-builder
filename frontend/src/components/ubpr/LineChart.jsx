@@ -28,7 +28,7 @@ export default function LineChart({
   const PAD = { top: 16, right: 20, bottom: 32, left: 56 };
   const H   = height;
 
-  // Scale width to number of points — scrolls when too many to fit
+  // Scale width to number of points - scrolls when too many to fit
   const minW  = expanded ? 800 : 400;
   const autoW = Math.max(minW, data.length * MIN_PX_PER_POINT + PAD.left + PAD.right);
   const W     = autoW;
@@ -54,7 +54,7 @@ export default function LineChart({
     y: toY(v), label: fmt(v),
   }));
 
-  // With scrolling, show every label — no need to skip
+  // With scrolling, show every label - no need to skip
   const showXLabel = (i) =>
     data.length <= 12
       ? (i === 0 || i === points.length - 1 || i % Math.ceil(points.length / 6) === 0)
@@ -65,7 +65,7 @@ export default function LineChart({
   const handleMouseMove = (e) => {
     const svg = e.currentTarget;
     const rect = svg.getBoundingClientRect();
-    const mx = e.clientX - rect.left; // no scaleX needed — SVG is not viewBox-scaled in scroll mode
+    const mx = e.clientX - rect.left; // no scaleX needed - SVG is not viewBox-scaled in scroll mode
     let closest = 0, minDist = Infinity;
     points.forEach((p, i) => {
       // convert SVG coords to rendered coords
@@ -164,7 +164,7 @@ export default function LineChart({
         </svg>
       </div>
 
-      {/* Tooltip — positioned relative to container */}
+      {/* Tooltip - positioned relative to container */}
       {tooltip && (
         <div style={{
           position: "absolute",

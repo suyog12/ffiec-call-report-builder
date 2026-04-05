@@ -6,7 +6,7 @@ A full-stack web application for retrieving, exploring, and comparing FFIEC Call
 
 ## Background
 
-U.S. banks file Call Reports with the FFIEC every quarter, containing detailed balance sheet, income, loan, and capital data. The FFIEC also publishes Uniform Bank Performance Reports (UBPR) — pre-calculated ratios covering capital adequacy, profitability, liquidity, and asset quality for every reporting institution back to 2001.
+U.S. banks file Call Reports with the FFIEC every quarter, containing detailed balance sheet, income, loan, and capital data. The FFIEC also publishes Uniform Bank Performance Reports (UBPR) - pre-calculated ratios covering capital adequacy, profitability, liquidity, and asset quality for every reporting institution back to 2001.
 
 This application wraps both data sources into a unified dashboard built for financial analysts and bank examiners.
 
@@ -14,9 +14,9 @@ This application wraps both data sources into a unified dashboard built for fina
 
 ## What the Application Does
 
-**Call Reports** — Select banks and periods from a sidebar, load SDF filings from the FFIEC API, explore schedule data, view the original PDF facsimile, and build custom pivot reports exported as CSV or PDF.
+**Call Reports** - Select banks and periods from a sidebar, load SDF filings from the FFIEC API, explore schedule data, view the original PDF facsimile, and build custom pivot reports exported as CSV or PDF.
 
-**Financial Analysis (UBPR)** — Search any FFIEC-reporting institution, view 10 priority ratios with regulatory threshold alerts, chart 8-quarter trends per metric, compare against size-based peer groups, run side-by-side multi-bank comparisons, and build custom ratio formulas.
+**Financial Analysis (UBPR)** - Search any FFIEC-reporting institution, view 10 priority ratios with regulatory threshold alerts, chart 8-quarter trends per metric, compare against size-based peer groups, run side-by-side multi-bank comparisons, and build custom ratio formulas.
 
 ---
 
@@ -202,7 +202,7 @@ FFIEC_PWS_TOKEN=your_token
 APP_HOST=127.0.0.1
 APP_PORT=8000
 
-# Cloudflare R2 — Financial Analysis module
+# Cloudflare R2 - Financial Analysis module
 R2_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
 R2_ACCESS_KEY_ID=your_key
 R2_SECRET_ACCESS_KEY=your_secret
@@ -291,7 +291,7 @@ ubpr_service.py → /ubpr/* → frontend
 
 R2 key pattern: `ubpr/year={YYYY}/quarter={YYYYMMDD}/data.parquet`
 
-DuckDB reads only the requested columns and the matching `rssd_id` row — no full table scans. An in-process LRU cache (1-hour TTL, 256 entries) prevents redundant R2 reads within a session.
+DuckDB reads only the requested columns and the matching `rssd_id` row - no full table scans. An in-process LRU cache (1-hour TTL, 256 entries) prevents redundant R2 reads within a session.
 
 ---
 
@@ -311,7 +311,7 @@ DuckDB reads only the requested columns and the matching `rssd_id` row — no fu
 
 ## Notes
 
-- Never commit real `.env` files — commit only `.env.example`
+- Never commit real `.env` files - commit only `.env.example`
 - `app.run/` is for local use only, not cloud deployment
 - The Financial Analysis module requires R2 access; Call Reports work with FFIEC credentials only
 - UBPR ingestion is run manually after each FFIEC quarterly data release using `bigdata/ingestion/ubpr_ingest.py`

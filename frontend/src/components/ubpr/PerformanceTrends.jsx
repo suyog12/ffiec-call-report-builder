@@ -119,7 +119,7 @@ export default function PerformanceTrends({ bank, quarters = [] }) {
     }
   }, [bank?.ID_RSSD]);
 
-  // When user selects a new code — fetch only that code
+  // When user selects a new code - fetch only that code
   const prevSelected = useRef(new Set());
   useEffect(() => {
     const added = [...selected].filter(c => !prevSelected.current.has(c));
@@ -129,7 +129,7 @@ export default function PerformanceTrends({ bank, quarters = [] }) {
     }
   }, [selected]);
 
-  // When quarter range changes — re-fetch all currently selected codes (debounced)
+  // When quarter range changes - re-fetch all currently selected codes (debounced)
   useEffect(() => {
     if (!selected.size) return;
     const timer = setTimeout(() => {
@@ -138,7 +138,7 @@ export default function PerformanceTrends({ bank, quarters = [] }) {
     return () => clearTimeout(timer);
   }, [fromQ, toQ]);
 
-  // When bank changes — clear all chart data
+  // When bank changes - clear all chart data
   useEffect(() => {
     setChartData({});
     setSelected(new Set());
@@ -154,7 +154,7 @@ export default function PerformanceTrends({ bank, quarters = [] }) {
         ...selectedList.map(code => {
           const pts = chartData[code]?.points || [];
           const pt  = pts.find(p => p.raw_quarter === q);
-          return pt ? parseFloat(pt.value).toFixed(2) + "%" : "—";
+          return pt ? parseFloat(pt.value).toFixed(2) + "%" : "-";
         }),
       ]),
       `${bankName.slice(0, 20)}_trends.csv`

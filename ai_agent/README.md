@@ -13,7 +13,7 @@ pip install -r requirements.txt
 
 # 2. Set up environment
 cp .env.example .env
-# Edit .env — add your GEMINI_API_KEY
+# Edit .env - add your GEMINI_API_KEY
 
 # 3. Run full demo (Gradescope submission)
 python main.py
@@ -31,7 +31,7 @@ python main.py --component 8
 
 ```
 ai_agent/
-├── main.py                    # Gradescope entry point — demos all 8 components
+├── main.py                    # Gradescope entry point - demos all 8 components
 ├── agents/
 │   ├── orchestrator.py        # Routes questions to sub-agents
 │   ├── ubpr_agent.py          # UBPR ratio + capital analysis

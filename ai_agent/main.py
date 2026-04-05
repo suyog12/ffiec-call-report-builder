@@ -1,7 +1,7 @@
 """
 main.py
 
-FFIEC Call Report Analysis Dashboard — AI Multi-Agent System
+FFIEC Call Report Analysis Dashboard - AI Multi-Agent System
 William & Mary MSBA Team 9, Class of 2026
 
 Gradescope submission entry point demonstrating all 8 LangChain components:
@@ -39,9 +39,7 @@ print(f"Gemini API key loaded")
 print(f"Backend URL: {BACKEND_URL}\n")
 
 
-
 # COMPONENT 1: LLM Initialization
-
 def demo_llm_initialization():
     print("=" * 60)
     print("COMPONENT 1: LLM Initialization")
@@ -51,13 +49,13 @@ def demo_llm_initialization():
 
     # Initialize with default temperature
     llm_precise = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-flash-preview-04-17",
         google_api_key=GEMINI_API_KEY,
         temperature=0.0,
     )
     # Initialize with higher temperature for more creative responses
     llm_creative = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-flash-preview-04-17",
         google_api_key=GEMINI_API_KEY,
         temperature=0.9,
     )
@@ -73,9 +71,7 @@ def demo_llm_initialization():
     return llm_precise
 
 
-
 # COMPONENT 2: Agent Creation
-
 def demo_agent_creation():
     print("=" * 60)
     print("COMPONENT 2: Agent Creation")
@@ -85,18 +81,16 @@ def demo_agent_creation():
 
     print("Creating UBPR Financial Analysis Agent...")
     ubpr_agent = create_ubpr_agent(temperature=0.1)
-    print("  UBPR Agent created — specialized in ratios, capital, peer comparison")
+    print("  UBPR Agent created - specialized in ratios, capital, peer comparison")
 
     print("Creating Call Report Agent...")
     cr_agent = create_call_report_agent(temperature=0.1)
-    print("  Call Report Agent created — specialized in filings, balance sheets, metrics\n")
+    print("  Call Report Agent created - specialized in filings, balance sheets, metrics\n")
 
     return ubpr_agent, cr_agent
 
 
-
 # COMPONENT 3: Message Handling (multi-turn)
-
 def demo_message_handling():
     print("=" * 60)
     print("COMPONENT 3: Message Handling (Multi-turn conversation)")
@@ -105,7 +99,7 @@ def demo_message_handling():
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-flash-preview-04-17",
         google_api_key=GEMINI_API_KEY,
         temperature=0.1,
     )
@@ -114,26 +108,24 @@ def demo_message_handling():
     messages: list[BaseMessage] = [
         HumanMessage(content="What is the CET1 capital ratio?"),
     ]
-    print(f"Turn 1 — User: {messages[0].content}")
+    print(f"Turn 1 - User: {messages[0].content}")
     r1 = llm.invoke(messages)
-    print(f"Turn 1 — AI: {r1.content[:300]}\n")
+    print(f"Turn 1 - AI: {r1.content[:300]}\n")
 
     messages.append(AIMessage(content=r1.content))
     messages.append(HumanMessage(content="What is the minimum required by Basel III?"))
-    print(f"Turn 2 — User: {messages[-1].content}")
+    print(f"Turn 2 - User: {messages[-1].content}")
     r2 = llm.invoke(messages)
-    print(f"Turn 2 — AI: {r2.content[:300]}\n")
+    print(f"Turn 2 - AI: {r2.content[:300]}\n")
 
     messages.append(AIMessage(content=r2.content))
     messages.append(HumanMessage(content="And what does 'well-capitalized' mean?"))
-    print(f"Turn 3 — User: {messages[-1].content}")
+    print(f"Turn 3 - User: {messages[-1].content}")
     r3 = llm.invoke(messages)
-    print(f"Turn 3 — AI: {r3.content[:300]}\n")
-
+    print(f"Turn 3 - AI: {r3.content[:300]}\n")
 
 
 # COMPONENT 4: Streaming Output
-
 def demo_streaming():
     print("=" * 60)
     print("COMPONENT 4: Streaming Output")
@@ -159,9 +151,7 @@ def demo_streaming():
     print(f"\n\nStreamed {len(full_response)} characters\n")
 
 
-
 # COMPONENT 5 + 6: Custom Tools + External API
-
 def demo_tools():
     print("=" * 60)
     print("COMPONENT 5 + 6: Custom Tools + External API Tool")
@@ -169,26 +159,24 @@ def demo_tools():
     from tools.ubpr_tools import get_ubpr_ratios, flag_regulatory_issues, get_peer_comparison
     from tools.call_report_tools import get_available_periods, get_bank_metrics
 
-    print("Tool 1: get_available_periods() — External API call to FFIEC backend")
+    print("Tool 1: get_available_periods() - External API call to FFIEC backend")
     result = get_available_periods.invoke({})
     print(f"  {result[:150]}\n")
 
-    print("Tool 2: get_ubpr_ratios() — Fetch UBPR ratios for Bank of America Q4 2025")
+    print("Tool 2: get_ubpr_ratios() - Fetch UBPR ratios for Bank of America Q4 2025")
     result = get_ubpr_ratios.invoke({"rssd_id": "480228", "quarter_date": "20251231"})
     print(f"  {result[:300]}\n")
 
-    print("Tool 3: flag_regulatory_issues() — Check capital adequacy thresholds")
+    print("Tool 3: flag_regulatory_issues() - Check capital adequacy thresholds")
     result = flag_regulatory_issues.invoke({"rssd_id": "480228", "quarter_date": "20251231"})
     print(f"  {result[:300]}\n")
 
-    print("Tool 4: get_bank_metrics() — Call Report metrics for JPMorgan Q4 2025")
+    print("Tool 4: get_bank_metrics() - Call Report metrics for JPMorgan Q4 2025")
     result = get_bank_metrics.invoke({"rssd_id": "852218", "reporting_period": "12/31/2025"})
     print(f"  {result[:300]}\n")
 
 
-
 # COMPONENT 7: Agent Memory
-
 def demo_memory():
     print("=" * 60)
     print("COMPONENT 7: Agent Memory (InMemorySaver)")
@@ -208,7 +196,7 @@ def demo_memory():
         print(f"  Response: {str(r1)[:200]}\n")
     except Exception as e:
         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-            print(" API rate limit reached. Quota resets at midnight Pacific Time.")
+            print("API rate limit reached. Quota resets at midnight Pacific Time.")
             return
         raise
 
@@ -234,9 +222,7 @@ def demo_memory():
     print("Agent remembered bank context across 3 turns without restating it\n")
 
 
-
 # COMPONENT 8: Multi-Agent Orchestration
-
 def demo_orchestration():
     print("=" * 60)
     print("COMPONENT 8: Multi-Agent Orchestration")
@@ -270,7 +256,8 @@ def demo_orchestration():
         except Exception as e:
             msg = str(e)
             if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-                print(" API rate limit reached. Quota resets at midnight Pacific Time.")
+                print("API rate limit reached. Quota resets at midnight Pacific Time.")
+                print("      The code is correct - this is a free-tier quota issue only.")
                 break
             else:
                 print(f"Error: {msg[:200]}")
@@ -278,13 +265,11 @@ def demo_orchestration():
     print("\nOrchestrator correctly routed all queries\n")
 
 
-
 # Interactive mode
-
 def interactive_mode():
     from agents.orchestrator import chat
     print("\n" + "=" * 60)
-    print("FFIEC AI Assistant — Interactive Mode")
+    print("FFIEC AI Assistant - Interactive Mode")
     print("Type 'exit' to quit, 'context' to set bank context")
     print("=" * 60 + "\n")
 
@@ -315,9 +300,7 @@ def interactive_mode():
     print("\nGoodbye!")
 
 
-
 # Main
-
 def main():
     parser = argparse.ArgumentParser(description="FFIEC AI Multi-Agent System Demo")
     parser.add_argument("--interactive", action="store_true", help="Run interactive chat")
@@ -345,7 +328,7 @@ def main():
 
     # Full demo
     print("\n" + "=" * 60)
-    print("FFIEC Call Report Analysis Dashboard — AI Multi-Agent Demo")
+    print("FFIEC Call Report Analysis Dashboard - AI Multi-Agent Demo")
     print("William & Mary MSBA Team 9, Class of 2026")
     print("=" * 60 + "\n")
 

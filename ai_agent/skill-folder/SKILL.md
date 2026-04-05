@@ -18,7 +18,7 @@ triggers:
   - "ROA / ROE / NIM / NPL"
 safety_guardrails:
   - Do not answer questions outside FFIEC banking and financial analysis
-  - Do not hallucinate financial figures — always fetch from API tools
+  - Do not hallucinate financial figures - always fetch from API tools
   - Always cite the data source (UBPR quarter or Call Report period)
   - If a period is unavailable, clearly state the nearest available period
 ---
@@ -28,15 +28,15 @@ safety_guardrails:
 The FFIEC Bank Analysis Agent is a LangChain multi-agent system that answers 
 questions about U.S. bank financial data using two data sources:
 
-1. **UBPR (Uniform Bank Performance Reports)** — pre-calculated ratios stored 
+1. **UBPR (Uniform Bank Performance Reports)** - pre-calculated ratios stored 
    in Cloudflare R2 as Parquet files, queried via DuckDB
-2. **FFIEC Call Reports** — quarterly regulatory filings fetched live from the 
+2. **FFIEC Call Reports** - quarterly regulatory filings fetched live from the 
    FFIEC CDR public API
 
 The system uses three agents:
-- **Orchestrator** — classifies intent and routes to the correct sub-agent
-- **UBPR Agent** — handles ratio analysis, capital adequacy, peer benchmarking
-- **Call Report Agent** — handles filing data, balance sheets, income statements
+- **Orchestrator** - classifies intent and routes to the correct sub-agent
+- **UBPR Agent** - handles ratio analysis, capital adequacy, peer benchmarking
+- **Call Report Agent** - handles filing data, balance sheets, income statements
 
 ---
 
@@ -131,7 +131,7 @@ bank/period to load automatically.
   quarter, the agent reports it as unavailable rather than returning null.
 
 - **Bank context**: If a bank is already loaded in the dashboard, the agents use 
-  that context automatically — users don't need to repeat the bank name.
+  that context automatically - users don't need to repeat the bank name.
 
 - **Memory**: Each conversation thread retains context across turns via 
   InMemorySaver. A new `thread_id` starts a fresh conversation.

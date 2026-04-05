@@ -28,7 +28,7 @@ function BankLogo({ bankName, size = 22 }) {
 }
 
 function fmtValue(raw) {
-  if (raw === null || raw === undefined || raw === "") return "—";
+  if (raw === null || raw === undefined || raw === "") return "-";
   const n = parseFloat(String(raw).replace(/,/g, ""));
   if (!isNaN(n)) return n.toLocaleString("en-US");
   return String(raw);
@@ -164,7 +164,7 @@ function ScheduleTable({ sectionName, data }) {
                       onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#fafbfc"}
                     >
                       <td style={{ padding: "7px 14px", fontSize: 11, color: "#94a3b8", borderBottom: "1px solid #f8fafc", whiteSpace: "nowrap" }}>
-                        {row.line_number || "—"}
+                        {row.line_number || "-"}
                       </td>
                       <td style={{ padding: "7px 14px", borderBottom: "1px solid #f8fafc", whiteSpace: "nowrap" }}>
                         <span style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 700, color, background: color + "10", border: `1px solid ${color}20`, padding: "2px 7px", borderRadius: 4 }}>

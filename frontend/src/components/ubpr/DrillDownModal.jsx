@@ -83,7 +83,7 @@ export default function DrillDownModal({ ratio, trendData, bankName, loading = f
             <div style={{ display: "grid", gridTemplateColumns: regStatus ? "1fr 1fr 1fr" : "1fr 1fr", gap: 12, marginBottom: 24 }}>
               <div style={{ padding: "16px 18px", background: BG, borderRadius: 10 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, marginBottom: 6, textTransform: "uppercase" }}>Latest Value</div>
-                <div style={{ fontSize: 30, fontWeight: 800, color: TEXT }}>{latest !== undefined ? fmtPct(latest) : "—"}</div>
+                <div style={{ fontSize: 30, fontWeight: 800, color: TEXT }}>{latest !== undefined ? fmtPct(latest) : "-"}</div>
                 {latestQ && <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>{typeof latestQ === "string" && latestQ.length === 8 ? formatQ(latestQ) : latestQ}</div>}
               </div>
 

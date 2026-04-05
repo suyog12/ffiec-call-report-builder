@@ -30,7 +30,7 @@ print(cols[:20])
 key_codes = ["UBPR7400", "UBPR7401", "UBPR7404", "UBPR7204", "UBPR7205",
              "UBPR7206", "UBPR7308", "UBPR7316", "UBPR1975", "UBPRJJ33"]
 
-print("\nKey ratio codes — present in Parquet?")
+print("\nKey ratio codes - present in Parquet?")
 for code in key_codes:
     found = code in cols
     print(f"  {code}: {'✓' if found else '✗ MISSING'}")

@@ -11,7 +11,7 @@ const SCHEDULE_COLORS = {
 const DEFAULT_COLOR = "#64748b";
 
 function fmtValue(raw) {
-  if (raw === null || raw === undefined || raw === "") return "—";
+  if (raw === null || raw === undefined || raw === "") return "-";
   const n = parseFloat(String(raw).replace(/,/g, ""));
   if (!isNaN(n)) return n.toLocaleString("en-US");
   return String(raw);
@@ -165,7 +165,7 @@ export default function SectionTable({ data, sectionName }) {
                     onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#fafbfc"}
                   >
                     <td style={{ padding: "8px 16px", fontSize: 11, color: "#94a3b8", borderBottom: "1px solid #f8fafc", whiteSpace: "nowrap" }}>
-                      {row.line_number || "—"}
+                      {row.line_number || "-"}
                     </td>
                     <td style={{ padding: "8px 16px", borderBottom: "1px solid #f8fafc", whiteSpace: "nowrap" }}>
                       <span style={{

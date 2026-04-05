@@ -6,7 +6,7 @@ Production-grade UBPR service.
 Trend fetching strategy:
 - User selects specific metric codes + quarter range
 - Backend fetches ONLY those codes per quarter (columnar pushdown)
-- No column discovery step — fast, minimal R2 reads
+- No column discovery step - fast, minimal R2 reads
 """
 
 import logging
@@ -113,7 +113,7 @@ class UBPRService:
         Fetch trend data for specific metric codes across a quarter range.
 
         - codes: the exact UBPR column codes the user selected (e.g. ["UBPR7204"])
-        - Fetches ONLY those columns per quarter — fast columnar pushdown
+        - Fetches ONLY those columns per quarter - fast columnar pushdown
         - No column discovery step needed
         - query_ratios handles schema differences between quarters internally
         """
@@ -133,7 +133,7 @@ class UBPRService:
         if not codes:
             return {"rssd_id": rssd_id, "trend": [], "quarters": quarter_dates}
 
-        # Parallel fetch — one small read per quarter, only requested columns
+        # Parallel fetch - one small read per quarter, only requested columns
         frames = []
         with ThreadPoolExecutor(max_workers=6) as ex:
             futures = {

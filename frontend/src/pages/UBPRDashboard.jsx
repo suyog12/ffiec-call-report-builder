@@ -56,7 +56,7 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
   const [peer, setPeer]       = useState(null);
   const [drill, setDrill]     = useState(null);
 
-  // Trend is NO LONGER fetched on Load — PerformanceTrends fetches lazily
+  // Trend is NO LONGER fetched on Load - PerformanceTrends fetches lazily
 
   useEffect(() => {
     fetchUBPRQuarters()
@@ -77,7 +77,7 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
       .catch(() => setBanks([]));
   }, [quarter]);
 
-  // Load only fetches ratios + peer — fast, always needed
+  // Load only fetches ratios + peer - fast, always needed
   const handleLoad = useCallback(async () => {
     if (!bank || !quarter) return;
     setLoading(true);
@@ -128,7 +128,7 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
         ))}
       </div>
 
-      {/* Institution selector — only on summary + peers */}
+      {/* Institution selector - only on summary + peers */}
       {showSelector && (
         <div style={{ background: "#fff", borderRadius: 12, padding: 20, marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 160px 140px", gap: 14, alignItems: "end" }}>
@@ -186,7 +186,7 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
               : !error && <EmptyState />
           )}
 
-          {/* Trends is always mounted when bank is set — manages its own data */}
+          {/* Trends is always mounted when bank is set - manages its own data */}
           <div style={{ display: tab === "trends" ? "block" : "none" }}>
             {bank
               ? <PerformanceTrends bank={bank} quarters={quarters} banks={banks} />

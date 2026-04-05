@@ -13,7 +13,7 @@ const GREEN  = "#16a34a";
 const RED    = "#dc2626";
 const GOLD   = WM.gold;
 
-// The 10 priority groups — one code per group, first available wins
+// The 10 priority groups - one code per group, first available wins
 const PRIORITY_GROUPS = [
   { codes: ["UBPRR031", "UBPRD487", "UBPR7400"], fallback: "Tier 1 Capital Ratio" },
   { codes: ["UBPRD488", "UBPRR033"],             fallback: "Total Capital Ratio"  },
@@ -54,10 +54,10 @@ export default function ExecutiveSummary({ bank, quarter, ratioData, trendData, 
       const meta = getRatioMeta(code);
       const td   = trendByKey[code] || [];
       const vals = td.map(p => parseFloat(p.value)).filter(v => !isNaN(v));
-      const chg  = vals.length >= 2 ? (vals[0] - vals[1]).toFixed(2) : "—";
+      const chg  = vals.length >= 2 ? (vals[0] - vals[1]).toFixed(2) : "-";
       const n    = parseFloat(rawRatios[code]);
       const pn   = parseFloat(peerAvgs[code]);
-      const vsp  = !isNaN(n) && !isNaN(pn) ? (n - pn).toFixed(2) : "—";
+      const vsp  = !isNaN(n) && !isNaN(pn) ? (n - pn).toFixed(2) : "-";
       const reg  = getRegulatoryStatus(code, rawRatios[code]);
       return [code, meta.label, meta.category, fmtVal(rawRatios[code], false), chg, vsp, reg?.label || "N/A"];
     }),
@@ -98,7 +98,7 @@ export default function ExecutiveSummary({ bank, quarter, ratioData, trendData, 
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: status.color, flexShrink: 0 }} />
                 <strong style={{ color: TEXT }}>{meta.label}</strong>
                 <span style={{ color: status.color, fontWeight: 700 }}>{fmtVal(rawRatios[code], false)}</span>
-                <span style={{ color: MUTED }}>{status.label} — {status.note}</span>
+                <span style={{ color: MUTED }}>{status.label} - {status.note}</span>
               </div>
             );
           })}
@@ -172,7 +172,7 @@ export default function ExecutiveSummary({ bank, quarter, ratioData, trendData, 
                 </div>
                 <div style={{ fontSize: 13, color: MUTED, textAlign: "right" }}>{fmtVal(pv, false)}</div>
                 <div style={{ textAlign: "right", fontSize: 13, fontWeight: 600, color: diff === null ? MUTED : good ? GREEN : RED }}>
-                  {diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff.toFixed(2)}pp`}
+                  {diff === null ? "-" : `${diff >= 0 ? "+" : ""}${diff.toFixed(2)}pp`}
                 </div>
                 <div style={{ textAlign: "center" }}>
                   {good !== null && (

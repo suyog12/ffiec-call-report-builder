@@ -27,7 +27,7 @@ cols = df.columns.tolist()
 # NPL ratio ~0.5-0.7% (noncurrent loans / total loans)
 # Net charge-off rate ~0.5-0.8% annualized
 
-# Print ALL ratio-like columns (0.001 to 0.02) — NPL and NCO should be here
+# Print ALL ratio-like columns (0.001 to 0.02) - NPL and NCO should be here
 print("=== All ratio columns between 0.001 and 0.02 (likely NPL/NCO range) ===")
 for c in sorted(cols):
     if not c.startswith("UBPR"):

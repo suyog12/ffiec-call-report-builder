@@ -51,7 +51,7 @@ AWS_ACCESS_KEY = os.getenv("R2_ACCESS_KEY_ID", "")
 AWS_SECRET_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "")
 BUCKET         = os.getenv("R2_BUCKET", "ffiec-data")
 
-# 9 GB hard cap per run. R2 writes are free — this is a safety guard
+# 9 GB hard cap per run. R2 writes are free - this is a safety guard
 # in case the FFIEC API starts returning unexpectedly large files.
 BUDGET_GB    = float(os.getenv("INGEST_BUDGET_GB", "9.0"))
 BUDGET_BYTES = BUDGET_GB * 1024 * 1024 * 1024
@@ -74,7 +74,7 @@ def validate_env():
     missing = [k for k in _REQUIRED_ENV if not os.getenv(k)]
     if missing:
         raise EnvironmentError(
-            f"Cannot start — missing environment variables: {missing}\n"
+            f"Cannot start - missing environment variables: {missing}\n"
             f"Check your .env file at bigdata/.env"
         )
 
@@ -132,7 +132,7 @@ def read_metadata(s3) -> dict:
         return metadata
     except ClientError as e:
         if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
-            logger.info("No metadata found — this looks like the first run.")
+            logger.info("No metadata found - this looks like the first run.")
             return {}
         raise RuntimeError(f"Could not read metadata from R2: {e}") from e
 
@@ -148,7 +148,7 @@ def write_metadata(s3, metadata: dict):
         s3.put_object(Bucket=BUCKET, Key=METADATA_KEY, Body=body, ContentType="application/json")
         logger.info("Metadata written to R2.")
     except Exception as e:
-        # Don't crash the whole run over metadata — just warn
+        # Don't crash the whole run over metadata - just warn
         logger.warning(f"Could not write metadata to R2 (non-fatal): {e}")
 
 
@@ -179,10 +179,10 @@ def check_cooldown(metadata: dict, force: bool) -> bool:
             )
             return True
 
-        logger.info(f"Last run was {days_since} days ago — proceeding.")
+        logger.info(f"Last run was {days_since} days ago - proceeding.")
         return False
     except ValueError:
-        logger.warning(f"Could not parse last_run_utc '{last_run_str}' — ignoring cooldown.")
+        logger.warning(f"Could not parse last_run_utc '{last_run_str}' - ignoring cooldown.")
         return False
 
 
@@ -234,7 +234,7 @@ def list_ffiec_available_quarters(start_year: int = 2001) -> list:
     so stepping back one quarter is the conservative safe approach.
 
     The download step itself will fail gracefully if a quarter turns out to
-    not be available yet — this just sets the upper bound safely.
+    not be available yet - this just sets the upper bound safely.
     """
     from datetime import date as _date
     quarter_ends = {1: "0331", 2: "0630", 3: "0930", 4: "1231"}
@@ -243,7 +243,7 @@ def list_ffiec_available_quarters(start_year: int = 2001) -> list:
     current_q = (today.month - 1) // 3 + 1
     current_year = today.year
 
-    # Step back one quarter — FFIEC data lags quarter end by ~45-60 days
+    # Step back one quarter - FFIEC data lags quarter end by ~45-60 days
     current_q -= 1
     if current_q == 0:
         current_q = 4
@@ -276,7 +276,7 @@ def ffiec_period_to_quarter_date(period_str: str) -> str:
         return dt.strftime("%Y%m%d")
     except ValueError as e:
         raise ValueError(
-            f"Cannot parse FFIEC period '{period_str}' — expected MM/DD/YYYY format"
+            f"Cannot parse FFIEC period '{period_str}' - expected MM/DD/YYYY format"
         ) from e
 
 
@@ -289,7 +289,7 @@ def quarter_date_to_ffiec_period(quarter_date: str) -> str:
         return dt.strftime("%m/%d/%Y")
     except ValueError as e:
         raise ValueError(
-            f"Cannot parse quarter date '{quarter_date}' — expected YYYYMMDD format"
+            f"Cannot parse quarter date '{quarter_date}' - expected YYYYMMDD format"
         ) from e
 
 
@@ -583,7 +583,7 @@ def run(full_history: bool = False, dry_run: bool = False, force: bool = False):
         logger.info(f"[DRY RUN] Estimated total: {estimated_gb:.2f} GB")
         return
 
-    # Step 6: Ingest — newest first, stop at budget
+    # Step 6: Ingest - newest first, stop at budget
     bytes_written = 0
     succeeded     = []
     failed        = []
@@ -664,13 +664,13 @@ def run(full_history: bool = False, dry_run: bool = False, force: bool = False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="UBPR ingestion pipeline — syncs FFIEC data to Cloudflare R2"
+        description="UBPR ingestion pipeline - syncs FFIEC data to Cloudflare R2"
     )
     parser.add_argument(
         "--full",
         action="store_true",
         help=(
-            "Ingest full history — everything FFIEC has that is not in R2. "
+            "Ingest full history - everything FFIEC has that is not in R2. "
             "Use this for the initial backfill. Subsequent runs should be incremental."
         ),
     )

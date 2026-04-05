@@ -4,28 +4,28 @@ export { REGULATORY_MINIMUMS, RULE_CHANGES };
 // ── Number formatting ─────────────────────────────────────────────────────────
 
 export function fmtPct(val, decimals = 2) {
-  if (val === null || val === undefined || val === "") return "—";
+  if (val === null || val === undefined || val === "") return "-";
   const n = parseFloat(val);
-  if (isNaN(n)) return "—";
+  if (isNaN(n)) return "-";
   return n.toFixed(decimals) + "%";
 }
 
 export function fmtMoney(val) {
-  if (val === null || val === undefined) return "—";
+  if (val === null || val === undefined) return "-";
   const n = parseFloat(val);
-  if (isNaN(n)) return "—";
+  if (isNaN(n)) return "-";
   if (Math.abs(n) >= 1e12) return "$" + (n / 1e12).toFixed(2) + "T";
   if (Math.abs(n) >= 1e9)  return "$" + (n / 1e9).toFixed(2) + "B";
   if (Math.abs(n) >= 1e6)  return "$" + (n / 1e6).toFixed(2) + "M";
   return "$" + n.toFixed(2);
 }
 
-// Generic formatter — picks percent or money based on the ratio definition.
+// Generic formatter - picks percent or money based on the ratio definition.
 // Falls back to 4dp for raw ratios.
 export function fmtVal(val, isPercent) {
-  if (val === null || val === undefined || val === "") return "—";
+  if (val === null || val === undefined || val === "") return "-";
   const n = parseFloat(val);
-  if (isNaN(n)) return "—";
+  if (isNaN(n)) return "-";
   if (isPercent) return (n * 100).toFixed(2) + "%";  // legacy, unused
   if (Math.abs(n) >= 1e6) return fmtMoney(n);
   return n.toFixed(2) + "%";
@@ -99,7 +99,7 @@ export function saveWatchlist(list) {
   try {
     localStorage.setItem(WATCHLIST_KEY, JSON.stringify(list));
   } catch {
-    // localStorage unavailable (private browsing, storage full) — fail silently
+    // localStorage unavailable (private browsing, storage full) - fail silently
   }
 }
 

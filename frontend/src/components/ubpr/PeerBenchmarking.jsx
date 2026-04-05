@@ -57,8 +57,8 @@ export default function PeerBenchmarking({ bank, quarter, peerData: initialPeerD
       const pv   = peerAvgs[code];
       const bn   = parseFloat(bv);
       const pn   = parseFloat(pv);
-      const diff = !isNaN(bn) && !isNaN(pn) ? (bn - pn).toFixed(2) : "—";
-      const pos  = !isNaN(bn) && !isNaN(pn) ? ((meta.higherBetter ? bn >= pn : bn <= pn) ? "Above" : "Below") : "—";
+      const diff = !isNaN(bn) && !isNaN(pn) ? (bn - pn).toFixed(2) : "-";
+      const pos  = !isNaN(bn) && !isNaN(pn) ? ((meta.higherBetter ? bn >= pn : bn <= pn) ? "Above" : "Below") : "-";
       return [code, meta.label, meta.category, fmtVal(bv, false), fmtVal(pv, false), diff, pos];
     }),
     `${bankName.slice(0, 20)}_${formatQ(quarter)}_peers.csv`
@@ -177,7 +177,7 @@ export default function PeerBenchmarking({ bank, quarter, peerData: initialPeerD
                   </div>
                   <div style={{ fontSize: 13, color: MUTED, textAlign: "right" }}>{fmtVal(pv, false)}</div>
                   <div style={{ textAlign: "right", fontSize: 13, fontWeight: 600, color: diff === null ? MUTED : good ? GREEN : RED }}>
-                    {diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff.toFixed(2)}pp`}
+                    {diff === null ? "-" : `${diff >= 0 ? "+" : ""}${diff.toFixed(2)}pp`}
                   </div>
                   <div style={{ textAlign: "center" }}>
                     {good !== null && (

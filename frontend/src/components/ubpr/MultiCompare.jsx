@@ -13,10 +13,10 @@ const MUTED  = "#6b8878";
 const GREEN  = "#16a34a";
 const RED    = "#dc2626";
 
-// Show only these categories in the compare view — keeps it clean
+// Show only these categories in the compare view - keeps it clean
 const COMPARE_CATEGORIES = ["Capital", "Profitability", "Liquidity", "Asset Quality"];
 
-// Priority codes per category — show the best available per bank
+// Priority codes per category - show the best available per bank
 const CATEGORY_PRIORITY = {
   "Capital":       ["UBPRR031", "UBPRD487", "UBPRD488", "UBPRD486", "UBPR7308"],
   "Profitability": ["UBPRE013", "UBPRE630", "UBPRE018"],
@@ -106,7 +106,7 @@ export default function MultiCompare({ quarters, banks }) {
         {error && <div style={{ marginTop: 12, padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, fontSize: 12, color: RED }}>{error}</div>}
       </div>
 
-      {/* Results — categorized tabs */}
+      {/* Results - categorized tabs */}
       {results.length > 0 && (
         <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -173,7 +173,7 @@ export default function MultiCompare({ quarters, banks }) {
                               {r.label.split(" ").slice(0, 3).join(" ")}
                             </div>
                             <div style={{ fontSize: 20, fontWeight: 800, color: best ? GREEN : worst ? RED : TEXT }}>
-                              {raw == null ? "—" : fmtVal(raw, false)}
+                              {raw == null ? "-" : fmtVal(raw, false)}
                             </div>
                             <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{formatQ(r.quarter)}</div>
                             {best && <div style={{ fontSize: 10, color: GREEN, fontWeight: 700, marginTop: 4 }}>▲ Best</div>}

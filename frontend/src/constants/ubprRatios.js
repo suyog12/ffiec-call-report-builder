@@ -4,7 +4,7 @@
  * Universal UBPR code lookup map.
  * The backend returns ALL non-null fields for each bank.
  * This map labels and categorizes whatever comes back.
- * Banks that don't report a code simply won't have it — no hardcoding needed.
+ * Banks that don't report a code simply won't have it - no hardcoding needed.
  */
 
 // ── Category colors ───────────────────────────────────────────────────────────
@@ -30,8 +30,8 @@ export const REGULATORY_MINIMUMS = {
 
 // ── Rule changes that affect trend analysis ───────────────────────────────────
 export const RULE_CHANGES = [
-  { date: "20200101", label: "CECL adopted",        note: "ASC 326 changed allowance methodology — pre/post not directly comparable" },
-  { date: "20150101", label: "Basel III effective",  note: "New capital ratio definitions — affects Tier 1 and CET1 comparisons"     },
+  { date: "20200101", label: "CECL adopted",        note: "ASC 326 changed allowance methodology - pre/post not directly comparable" },
+  { date: "20150101", label: "Basel III effective",  note: "New capital ratio definitions - affects Tier 1 and CET1 comparisons"     },
 ];
 
 // ── Priority display codes ────────────────────────────────────────────────────

@@ -65,7 +65,7 @@ def get_peer_comparison(rssd_id: str, quarter_date: str, peer_group: str = "all"
     Args:
         rssd_id: The bank's RSSD ID
         quarter_date: Quarter in YYYYMMDD format
-        peer_group: Size group — "all", "large" (>$100B), "mid" ($10B-$100B),
+        peer_group: Size group - "all", "large" (>$100B), "mid" ($10B-$100B),
                     "community" (<$10B), "small" (<$1B)
 
     Returns:
@@ -183,7 +183,7 @@ def flag_regulatory_issues(rssd_id: str, quarter_date: str) -> str:
             else:
                 status = "🚨 UNDERCAPITALIZED"
             lines.append(
-                f"  {name} ({code}): {v:.2f}% — {status} "
+                f"  {name} ({code}): {v:.2f}% - {status} "
                 f"(min: {thresholds['min']}%, well-cap: {thresholds['well']}%)"
             )
 

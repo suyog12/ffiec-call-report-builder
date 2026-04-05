@@ -30,7 +30,7 @@ _S3_HOST = (
 
 # ── In-process LRU cache ───────────────────────────────────────────────────────
 _CACHE_MAX   = 256
-_CACHE_TTL   = 3600        # 1 hour — data doesn't change within a quarter
+_CACHE_TTL   = 3600        # 1 hour - data doesn't change within a quarter
 _cache: OrderedDict  = OrderedDict()
 _cache_times: dict   = {}
 _cache_lock          = threading.Lock()
@@ -74,7 +74,7 @@ def cache_clear():
 def _new_con() -> duckdb.DuckDBPyConnection:
     """
     Open a fresh DuckDB connection configured for Cloudflare R2 via httpfs.
-    DuckDB connections are NOT thread-safe — always create one per call
+    DuckDB connections are NOT thread-safe - always create one per call
     and close it in a finally block.
     """
     if not _S3_HOST or not ACCESS_KEY or not SECRET_KEY:
@@ -206,7 +206,7 @@ def query_peer_averages(
     Compute column averages across banks for a given quarter.
     - exclude_rssd_id: excludes the selected bank from the average
     - peer_group: filters by asset size bucket (all / size:large / size:mid / size:community / size:small)
-    Single Parquet scan — only requested columns are read from R2.
+    Single Parquet scan - only requested columns are read from R2.
     Cached for 1 hour.
     """
     key = _ck("peer", quarter_date, tuple(sorted(columns)), exclude_rssd_id or "", peer_group)
@@ -287,7 +287,7 @@ def query_multi_bank(
 ) -> pd.DataFrame:
     """
     Fetch specific columns for multiple banks in a single Parquet scan.
-    Faster than N separate query_ratios calls — used by the Compare tab.
+    Faster than N separate query_ratios calls - used by the Compare tab.
     Cached for 1 hour.
     """
     key = _ck("multi", tuple(sorted(rssd_ids)), quarter_date, tuple(sorted(columns)))
@@ -323,7 +323,7 @@ def list_available_quarters() -> list:
     """
     List all ingested quarter_dates by scanning the R2 prefix hierarchy.
     Returns a sorted list e.g. ['20240331', '20240630', '20240930', ...].
-    Cached for 1 hour — only changes when ingestion runs.
+    Cached for 1 hour - only changes when ingestion runs.
     """
     key = _ck("quarters")
     hit = _cache_get(key)
@@ -362,7 +362,7 @@ def list_available_quarters() -> list:
 # ── Health check ───────────────────────────────────────────────────────────────
 
 def ping_r2() -> dict:
-    """Quick connectivity check — does not read any data rows."""
+    """Quick connectivity check - does not read any data rows."""
     try:
         quarters = list_available_quarters()
         return {

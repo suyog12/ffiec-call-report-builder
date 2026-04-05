@@ -5,9 +5,9 @@
 **Generated:** {date}
 
 ## Capital Adequacy
-- CET1 Ratio: {cet1}% — {cet1_status}
-- Total Capital: {total_capital}% — {total_capital_status}
-- Leverage Ratio: {leverage}% — {leverage_status}
+- CET1 Ratio: {cet1}% - {cet1_status}
+- Total Capital: {total_capital}% - {total_capital_status}
+- Leverage Ratio: {leverage}% - {leverage_status}
 
 ## Profitability
 - Return on Assets (ROA): {roa}%

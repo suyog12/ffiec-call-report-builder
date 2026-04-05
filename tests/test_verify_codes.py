@@ -37,8 +37,8 @@ candidates = {
     "UBPR7308": "Equity to Assets",
     # Liquidity
     "UBPR7316": "Loan to Deposit Ratio",
-    # Asset Quality — confirmed from FFIEC docs
-    "UBPR7414": "Noncurrent Loans to Gross Loans (NPL) — CONFIRMED CODE",
+    # Asset Quality - confirmed from FFIEC docs
+    "UBPR7414": "Noncurrent Loans to Gross Loans (NPL) - CONFIRMED CODE",
     # Net charge-off candidates
     "UBPRC193": "Net Charge-Off Rate candidate",
     "UBPRC194": "Net Charge-Off Rate candidate",

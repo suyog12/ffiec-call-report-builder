@@ -37,7 +37,7 @@ export default function BuildRatio({ quarters, banks }) {
     setResult(null);
     try {
       const resp = await fetch(`${BASE_URL}/ubpr/all-fields?rssd_id=${bank.ID_RSSD}&quarter_date=${quarter}`);
-      if (!resp.ok) throw new Error(`Backend returned ${resp.status} — check that the server is running`);
+      if (!resp.ok) throw new Error(`Backend returned ${resp.status} - check that the server is running`);
       const data   = await resp.json();
       const fields = data.fields || {};
       const num    = parseFloat(fields[numCode.trim()]);

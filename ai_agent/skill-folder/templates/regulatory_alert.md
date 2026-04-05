@@ -3,7 +3,7 @@
 **Institution:** {bank_name}  
 **RSSD ID:** {rssd_id}  
 **Quarter:** {quarter}  
-**Alert Level:** {level} — UNDERCAPITALIZED / ADEQUATELY CAPITALIZED
+**Alert Level:** {level} - UNDERCAPITALIZED / ADEQUATELY CAPITALIZED
 
 ## Ratio Below Threshold
 
