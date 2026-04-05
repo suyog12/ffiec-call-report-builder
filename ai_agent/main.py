@@ -49,13 +49,13 @@ def demo_llm_initialization():
 
     # Initialize with default temperature
     llm_precise = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-preview-04-17",
+        model="gemini-2.5-flash",
         google_api_key=GEMINI_API_KEY,
         temperature=0.0,
     )
     # Initialize with higher temperature for more creative responses
     llm_creative = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-preview-04-17",
+        model="gemini-2.5-flash",
         google_api_key=GEMINI_API_KEY,
         temperature=0.9,
     )
@@ -99,7 +99,7 @@ def demo_message_handling():
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-preview-04-17",
+        model="gemini-2.5-flash",
         google_api_key=GEMINI_API_KEY,
         temperature=0.1,
     )
