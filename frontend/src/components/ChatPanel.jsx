@@ -217,7 +217,7 @@ export default function ChatPanel({
       const primaryBank = validEntries[0]?.bank;
       const primaryQuarter = validEntries[0]?.quarter;
       const contextNote = primaryBank
-        ? `[Context: Analyzing ${primaryBank.Name} (RSSD: ${primaryBank.ID_RSSD}), Quarter: ${primaryQuarter}] `
+        ? `[Context: Analyzing ${primaryBank.Name?.trim()} (RSSD: ${primaryBank.ID_RSSD}), Quarter: ${primaryQuarter}] `
         : "";
       const enhancedQuestion = contextNote + q;
 
@@ -250,7 +250,7 @@ export default function ChatPanel({
 
     } catch (e) {
       addMessage("assistant",
-        "Failed to connect to the AI assistant. Please check that the backend is running."
+        "⚠️ Failed to connect to the AI assistant. Please check that the backend is running."
       );
     } finally {
       setLoading(false);
