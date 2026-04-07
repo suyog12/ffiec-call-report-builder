@@ -66,11 +66,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r bigdata/requirements.txt
           pip install -e bigdata/
+          pip install pyspark
 
       # ── 5. Write .env for ingestion ────────────────────────────────────────
       - name: Configure environment
         run: |
-          cat > bigdata/bigdata/.env << EOF
+          mkdir -p bigdata
+          cat > bigdata/.env << EOF
           R2_ENDPOINT=${{ secrets.R2_ENDPOINT }}
           R2_ACCESS_KEY_ID=${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY=${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -86,7 +88,7 @@ jobs:
           python - << 'EOF'
           import sys, os
           sys.path.insert(0, 'bigdata')
-          from bigdata.queryengine.query_engine import ping_r2
+          from queryengine.query_engine import ping_r2
           result = ping_r2()
           print(f"R2 status: {result}")
           if result['status'] != 'ok':
@@ -98,7 +100,6 @@ jobs:
       # ── 7. Dry run — show what will be ingested ────────────────────────────
       - name: Preview ingestion plan
         run: |
-          cd bigdata
           ARGS="--dry-run"
           if [ "${{ github.event.inputs.mode }}" = "full" ]; then ARGS="$ARGS --full"; fi
           if [ -n "${{ github.event.inputs.quarter }}" ]; then ARGS="$ARGS --quarter ${{ github.event.inputs.quarter }}"; fi
@@ -108,7 +109,6 @@ jobs:
       - name: Run ingestion
         if: ${{ github.event.inputs.mode != 'dry-run' }}
         run: |
-          cd bigdata
           ARGS=""
           MODE="${{ github.event.inputs.mode || 'incremental' }}"
           if [ "$MODE" = "full" ]; then ARGS="--full"; fi
@@ -123,10 +123,10 @@ jobs:
           python - << 'EOF'
           import sys
           sys.path.insert(0, 'bigdata')
-          from bigdata.queryengine.query_engine import list_available_quarters, ping_r2
+          from queryengine.query_engine import list_available_quarters, ping_r2
           result = ping_r2()
           quarters = list_available_quarters()
-          print(f"✅ R2 now has {len(quarters)} quarters")
+          print(f"R2 now has {len(quarters)} quarters")
           print(f"   Oldest: {quarters[0] if quarters else 'none'}")
           print(f"   Latest: {quarters[-1] if quarters else 'none'}")
           EOF
@@ -139,5 +139,5 @@ jobs:
             "${{ secrets.RENDER_BACKEND_URL }}/ubpr/cache/clear" \
             -X POST \
             -H "X-Internal-Token: ${{ secrets.INTERNAL_API_TOKEN }}" \
-          | grep -q "200" && echo "✅ Cache cleared" || echo "⚠️ Cache clear failed (non-fatal)"
+          | grep -q "200" && echo "Cache cleared" || echo "Cache clear failed (non-fatal)"
         continue-on-error: true
