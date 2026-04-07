@@ -163,7 +163,7 @@ def create_orchestrator(temperature: float = 0.1):
 
 
 
-# ── Simple monthly request counter ──────────────────────────────────────────
+# Simple monthly request counter ──────────────────────────────────────────
 # Resets when the process restarts. For persistent tracking use a database.
 _request_count = 0
 _MONTHLY_REQUEST_LIMIT = 14_000  # ~$5/month at gemini-2.5-flash rates

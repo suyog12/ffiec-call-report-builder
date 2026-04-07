@@ -209,7 +209,7 @@ export default function App() {
   const [periodsLoading, setPeriodsLoading] = useState(true);
   const [selectedPeriods, setSelectedPeriods] = useState([]);
 
-  // ── Banks ─────────────────────────────────────────────────
+  // ── Banks
   const [banks, setBanks] = useState([]);
   const [bankQuery, setBankQuery] = useState("");
   const [selectedBanks, setSelectedBanks] = useState([]);

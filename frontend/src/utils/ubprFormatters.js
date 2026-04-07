@@ -1,7 +1,7 @@
 import { REGULATORY_MINIMUMS, RULE_CHANGES } from "../constants/ubprRatios";
 export { REGULATORY_MINIMUMS, RULE_CHANGES };
 
-// ── Number formatting ─────────────────────────────────────────────────────────
+// ── Number formatting────────
 
 export function fmtPct(val, decimals = 2) {
   if (val === null || val === undefined || val === "") return "-";
@@ -39,7 +39,7 @@ export function formatQ(q) {
   return `Q${Math.ceil(m / 3)} ${y}`;
 }
 
-// ── Regulatory helpers ────────────────────────────────────────────────────────
+// ── Regulatory helpers───────
 
 // Returns null if the ratio has no regulatory threshold, otherwise:
 // { status: "danger"|"warning"|"healthy", color, label, note }
@@ -62,7 +62,7 @@ export function getRuleChangeWarning(fromQuarter, toQuarter) {
   return RULE_CHANGES.find(r => r.date > a && r.date <= b) || null;
 }
 
-// ── CSV export ────────────────────────────────────────────────────────────────
+// ── CSV export───────────────
 
 // Triggers a browser download of a CSV file.
 // headers: string[]
@@ -83,7 +83,7 @@ export function exportCSV(headers, rows, filename = "export.csv") {
   URL.revokeObjectURL(url);
 }
 
-// ── Watchlist persistence ─────────────────────────────────────────────────────
+// ── Watchlist persistence────
 
 const WATCHLIST_KEY = "ubpr_watchlist";
 
@@ -103,7 +103,7 @@ export function saveWatchlist(list) {
   }
 }
 
-// ── Trend data helpers ────────────────────────────────────────────────────────
+// ── Trend data helpers───────
 
 // Convert the raw trend API response into a lookup map:
 // { "UBPR7204": [{ quarter: "Q4 2025", value: "0.0123" }, ...], ... }

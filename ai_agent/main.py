@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── Validate environment ─────────────────────────────────────────────────────
+# Validate environment────
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 BACKEND_URL    = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
 

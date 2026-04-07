@@ -1,20 +1,10 @@
 name: UBPR Data Ingestion
 
 on:
-  # Run automatically when a new quarter likely becomes available
   schedule:
     - cron: "0 8 15 1,4,7,10 *"
 
-  # Allow manual trigger from GitHub UI on any branch
   workflow_dispatch:
-
-  # Also run when pushed to this branch (for testing)
-  push:
-    branches:
-      - sprak-logic-modification
-    paths:
-      - "bigdata/ingestion/ubpr_ingest.py"
-      - ".github/workflows/ubpr_ingest.yml"
     inputs:
       mode:
         description: "Ingestion mode"
@@ -22,11 +12,12 @@ on:
         default: "incremental"
         type: choice
         options:
-          - incremental   # only new quarters missing from R2
-          - full          # backfill all missing quarters
-          - dry-run       # preview without downloading
+          - incremental
+          - full
+          - backfill-only
+          - dry-run
       quarter:
-        description: "Specific quarter to ingest (YYYYMMDD) — leave blank for auto"
+        description: "Specific quarter (YYYYMMDD) — leave blank for auto"
         required: false
         default: ""
       budget_gb:
@@ -38,14 +29,12 @@ jobs:
   ingest:
     name: Ingest FFIEC UBPR Data
     runs-on: ubuntu-latest
-    timeout-minutes: 180   # 3 hours max — full backfill of 93 quarters takes ~2 hours
+    timeout-minutes: 360
 
     steps:
-      # ── 1. Checkout ────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Python setup ────────────────────────────────────────────────────
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -53,22 +42,18 @@ jobs:
           cache: "pip"
           cache-dependency-path: bigdata/requirements.txt
 
-      # ── 3. Java for PySpark ────────────────────────────────────────────────
-      - name: Set up Java 11 (required for PySpark)
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           java-version: "17"
           distribution: "temurin"
 
-      # ── 4. Install dependencies ────────────────────────────────────────────
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r bigdata/requirements.txt
-          pip install -e bigdata/
-          pip install pyspark
+          pip install pyspark==3.5.0 duckdb boto3 pyarrow pandas python-dotenv ffiec-data-collector
 
-      # ── 5. Write .env for ingestion ────────────────────────────────────────
       - name: Configure environment
         run: |
           mkdir -p bigdata
@@ -82,62 +67,150 @@ jobs:
           INGEST_BUDGET_GB=${{ github.event.inputs.budget_gb || '50' }}
           EOF
 
-      # ── 6. Test R2 connectivity ────────────────────────────────────────────
       - name: Test R2 connectivity
         run: |
-          python - << 'EOF'
-          import sys, os
-          sys.path.insert(0, 'bigdata')
-          from queryengine.query_engine import ping_r2
-          result = ping_r2()
-          print(f"R2 status: {result}")
-          if result['status'] != 'ok':
-              print(f"R2 connectivity failed: {result.get('detail')}")
-              sys.exit(1)
-          print(f"R2 reachable — {result['quarters_available']} quarters currently stored")
-          EOF
+          cd bigdata
+          python - << 'PYEOF'
+          import os
+          from dotenv import load_dotenv
+          load_dotenv('.env')
+          import boto3
+          s3 = boto3.client(
+              's3',
+              endpoint_url=os.environ['R2_ENDPOINT'],
+              aws_access_key_id=os.environ['R2_ACCESS_KEY_ID'],
+              aws_secret_access_key=os.environ['R2_SECRET_ACCESS_KEY'],
+              region_name='auto',
+          )
+          r = s3.list_objects_v2(Bucket=os.environ['R2_BUCKET'], Prefix='ubpr/year=', MaxKeys=5)
+          print(f"R2 reachable — {r.get('KeyCount', 0)} sample objects found")
+          PYEOF
 
-      # ── 7. Dry run — show what will be ingested ────────────────────────────
       - name: Preview ingestion plan
         run: |
+          cd bigdata
           ARGS="--dry-run"
-          if [ "${{ github.event.inputs.mode }}" = "full" ]; then ARGS="$ARGS --full"; fi
-          if [ -n "${{ github.event.inputs.quarter }}" ]; then ARGS="$ARGS --quarter ${{ github.event.inputs.quarter }}"; fi
-          python bigdata/ingestion/ubpr_ingest.py $ARGS
+          MODE="${{ github.event.inputs.mode || 'incremental' }}"
+          if [ "$MODE" = "full" ]; then ARGS="$ARGS --full"; fi
+          if [ -n "${{ github.event.inputs.quarter }}" ]; then
+            ARGS="$ARGS --quarter ${{ github.event.inputs.quarter }}"
+          fi
+          python ingestion/ubpr_ingest.py $ARGS
 
-      # ── 8. Run ingestion ───────────────────────────────────────────────────
-      - name: Run ingestion
-        if: ${{ github.event.inputs.mode != 'dry-run' }}
+      # Step A — Download new quarters from FFIEC (skipped for backfill-only and dry-run)
+      - name: Download new quarters from FFIEC
+        if: |
+          github.event.inputs.mode != 'dry-run' &&
+          github.event.inputs.mode != 'backfill-only'
         run: |
+          cd bigdata
           ARGS=""
           MODE="${{ github.event.inputs.mode || 'incremental' }}"
           if [ "$MODE" = "full" ]; then ARGS="--full"; fi
-          if [ -n "${{ github.event.inputs.quarter }}" ]; then ARGS="$ARGS --quarter ${{ github.event.inputs.quarter }}"; fi
-          BUDGET="${{ github.event.inputs.budget_gb || '50' }}"
-          python bigdata/ingestion/ubpr_ingest.py $ARGS --budget-gb $BUDGET
+          if [ -n "${{ github.event.inputs.quarter }}" ]; then
+            ARGS="$ARGS --quarter ${{ github.event.inputs.quarter }}"
+          fi
+          python ingestion/ubpr_ingest.py $ARGS --budget-gb ${{ github.event.inputs.budget_gb || '50' }}
 
-      # ── 9. Verify results ──────────────────────────────────────────────────
-      - name: Verify R2 after ingestion
-        if: ${{ github.event.inputs.mode != 'dry-run' }}
+      # Step B — Backfill per-bank files for all quarters that are missing them
+      # Reads existing R2 full-quarter files and splits into per-bank files
+      # No FFIEC download — uses data already in R2
+      # Enables sub-100ms queries instead of scanning 30MB files
+      - name: Backfill per-bank files
+        if: github.event.inputs.mode != 'dry-run'
         run: |
-          python - << 'EOF'
-          import sys
-          sys.path.insert(0, 'bigdata')
-          from queryengine.query_engine import list_available_quarters, ping_r2
-          result = ping_r2()
-          quarters = list_available_quarters()
-          print(f"R2 now has {len(quarters)} quarters")
-          print(f"   Oldest: {quarters[0] if quarters else 'none'}")
-          print(f"   Latest: {quarters[-1] if quarters else 'none'}")
-          EOF
+          cd bigdata
+          python - << 'PYEOF'
+          import sys, os, logging
+          sys.path.insert(0, '.')
+          from dotenv import load_dotenv
+          load_dotenv('.env')
 
-      # ── 10. Trigger Render backend cache clear ─────────────────────────────
+          logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+          logger = logging.getLogger('backfill')
+
+          from ingestion.ubpr_ingest import (
+              get_s3, list_r2_quarters,
+              check_r2_quarter_state,
+              backfill_per_bank_from_full_quarter,
+          )
+
+          s3 = get_s3()
+          r2_quarters = list_r2_quarters(s3)
+          logger.info(f"Found {len(r2_quarters)} full-quarter files in R2")
+
+          need_backfill = []
+          for q in sorted(r2_quarters.keys(), reverse=True):
+              state = check_r2_quarter_state(s3, q)
+              if state['has_full_quarter'] and not state['has_per_bank']:
+                  need_backfill.append(q)
+
+          logger.info(f"Quarters needing per-bank backfill: {len(need_backfill)}")
+
+          if not need_backfill:
+              logger.info("All quarters already have per-bank files")
+              sys.exit(0)
+
+          succeeded, failed, total_bytes = [], [], 0
+
+          for i, q in enumerate(need_backfill, 1):
+              logger.info(f"[{i}/{len(need_backfill)}] Backfilling {q}...")
+              try:
+                  b = backfill_per_bank_from_full_quarter(s3, q)
+                  total_bytes += b
+                  succeeded.append(q)
+                  logger.info(f"  {q}: {b/1024:.0f} KB written")
+              except Exception as e:
+                  logger.error(f"  {q} failed: {e}")
+                  failed.append(q)
+
+          logger.info(f"Backfill done: {len(succeeded)} succeeded, {len(failed)} failed, {total_bytes/1024/1024:.1f} MB written")
+          if failed:
+              logger.warning(f"Failed quarters: {failed}")
+          PYEOF
+
+      - name: Verify R2 state
+        if: github.event.inputs.mode != 'dry-run'
+        run: |
+          cd bigdata
+          python - << 'PYEOF'
+          import os
+          from dotenv import load_dotenv
+          load_dotenv('.env')
+          import boto3
+
+          s3 = boto3.client(
+              's3',
+              endpoint_url=os.environ['R2_ENDPOINT'],
+              aws_access_key_id=os.environ['R2_ACCESS_KEY_ID'],
+              aws_secret_access_key=os.environ['R2_SECRET_ACCESS_KEY'],
+              region_name='auto',
+          )
+          paginator = s3.get_paginator('list_objects_v2')
+          full_quarters = per_bank_files = total_bytes = 0
+
+          for page in paginator.paginate(Bucket=os.environ['R2_BUCKET'], Prefix='ubpr/'):
+              for obj in page.get('Contents', []):
+                  key = obj['Key']
+                  total_bytes += obj['Size']
+                  if '/quarter=' in key and key.endswith('/data.parquet'):
+                      full_quarters += 1
+                  elif '/by_bank/' in key:
+                      per_bank_files += 1
+
+          print(f"R2 state:")
+          print(f"  Full-quarter files : {full_quarters}")
+          print(f"  Per-bank files     : {per_bank_files:,}")
+          print(f"  Total size         : {total_bytes/1024/1024/1024:.2f} GB")
+          print(f"  Avg banks/quarter  : {per_bank_files//full_quarters if full_quarters else 0}")
+          PYEOF
+
       - name: Clear backend cache
-        if: ${{ github.event.inputs.mode != 'dry-run' }}
+        if: github.event.inputs.mode != 'dry-run'
         run: |
           curl -s -o /dev/null -w "%{http_code}" \
             "${{ secrets.RENDER_BACKEND_URL }}/ubpr/cache/clear" \
             -X POST \
             -H "X-Internal-Token: ${{ secrets.INTERNAL_API_TOKEN }}" \
-          | grep -q "200" && echo "Cache cleared" || echo "Cache clear failed (non-fatal)"
+          | grep -q "200" && echo "Backend cache cleared" || echo "Cache clear failed (non-fatal)"
         continue-on-error: true

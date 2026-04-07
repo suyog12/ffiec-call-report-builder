@@ -11,13 +11,13 @@ body {
 
 h1,h2,h3,h4 { line-height: 1.2; }
 
-/* ── Layout ─────────────────────────────────────────────────── */
+/* ── Layout── */
 .app-shell {
   display: flex;
   min-height: 100vh;
 }
 
-/* ── Sidebar ─────────────────────────────────────────────────── */
+/* ── Sidebar── */
 .sidebar {
   width: 272px;
   min-width: 272px;
@@ -89,7 +89,7 @@ h1,h2,h3,h4 { line-height: 1.2; }
   overflow: hidden;
 }
 
-/* ── Top bar ─────────────────────────────────────────────────── */
+/* ── Top bar── */
 .topbar {
   background: #fafbf8;
   border-bottom: 1px solid #e2e8f0;
@@ -139,7 +139,7 @@ h1,h2,h3,h4 { line-height: 1.2; }
   flex-shrink: 0;
 }
 
-/* ── Tab nav ─────────────────────────────────────────────────── */
+/* ── Tab nav── */
 .tab-nav {
   background: #fafbf8;
   border-bottom: 1px solid #e2e8f0;
@@ -176,7 +176,7 @@ h1,h2,h3,h4 { line-height: 1.2; }
   overflow-y: auto;
 }
 
-/* ── Cards ───────────────────────────────────────────────────── */
+/* ── Cards──── */
 .card {
   background: #fdfefe;
   border: 1px solid #e2e8f0;
@@ -213,7 +213,7 @@ h1,h2,h3,h4 { line-height: 1.2; }
   letter-spacing: -0.5px;
 }
 
-/* ── Buttons ─────────────────────────────────────────────────── */
+/* ── Buttons── */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -437,7 +437,7 @@ h1,h2,h3,h4 { line-height: 1.2; }
 .sidebar-inner::-webkit-scrollbar-track { background: transparent; }
 .sidebar-inner::-webkit-scrollbar-thumb { background: #0f4a35; border-radius: 2px; }
 
-/* ── Tables ──────────────────────────────────────────────────── */
+/* ── Tables─── */
 table { border-collapse: collapse; width: 100%; }
 th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; text-align: left; }
 td { padding: 6px 10px; border: 1px solid #f1f5f9; font-size: 13px; }
@@ -795,7 +795,7 @@ tr:hover td { background: #fafafa; }
   }
 }
 
-/* ── Tablet ──────────────────────────────────────────────────── */
+/* ── Tablet─── */
 @media (min-width: 768px) and (max-width: 991px) {
   .sidebar {
     width: 220px !important;
@@ -820,7 +820,7 @@ tr:hover td { background: #fafafa; }
   }
 }
 
-/* ── Laptop ──────────────────────────────────────────────────── */
+/* ── Laptop─── */
 @media (min-width: 992px) and (max-width: 1199px) {
   .sidebar {
     width: 240px !important;

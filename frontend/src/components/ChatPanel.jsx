@@ -12,7 +12,7 @@ const MUTED  = "#6b8878";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
-// ── Markdown-lite renderer ─────────────────────────────────────────────────
+// ── Markdown-lite renderer
 function renderMessage(text) {
   if (!text) return null;
   const lines = text.split("\n");
@@ -64,7 +64,7 @@ function BankRow({ idx, entry, quarters, banks, onUpdate, onRemove, canRemove })
   );
 }
 
-// ── Message bubble ─────────────────────────────────────────────────────────
+// ── Message bubble────────
 function MessageBubble({ msg }) {
   const isUser = msg.role === "user";
   const isSystem = msg.role === "system";
@@ -113,7 +113,7 @@ function MessageBubble({ msg }) {
   );
 }
 
-// ── Typing indicator ───────────────────────────────────────────────────────
+// ── Typing indicator──────
 function TypingIndicator() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "10px 14px",

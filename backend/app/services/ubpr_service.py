@@ -1,6 +1,27 @@
+"""
+ubpr_service.py
+===============
+
+Responsibilities
+----------------
+- Translate raw Parquet data into structured API responses
+- Apply business rules (priority ratio selection, peer comparison)
+- Provide graceful degradation — every method returns a valid response
+- Warm in-process column cache to avoid repeated R2 reads
+
+Performance
+-----------
+- Trend fetches run in parallel via ThreadPoolExecutor
+- Column cache avoids repeated full-file scans for known banks
+- bank_has_data() used as guard before every query
+"""
+
+from __future__ import annotations
+
 import logging
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 
 import pandas as pd
 
@@ -12,47 +33,54 @@ from queryengine.query_engine import (
     query_peer_averages,
     query_multi_bank,
     list_available_quarters,
-    bank_has_data as _qe_bank_has_data,
-    cache_clear as _qe_cache_clear,
+    bank_has_data as _bank_has_data,
+    cache_clear as _cache_clear,
 )
 
+# Constants
 _META_COLS = {"rssd_id", "quarter_date"}
 
-_PEER_CODES = [
-    "UBPRE013",  # ROA
-    "UBPRE018",  # NIM
-    "UBPRD487",  # Tier 1 Risk-Based Capital %
-    "UBPRD486",  # Leverage Ratio %
-    "UBPRD488",  # Total Capital Ratio %
+# Ratio codes used for peer comparison
+_PEER_CODES: list[str] = [
+    "UBPRE013",  # Return on Assets
+    "UBPRE018",  # Net Interest Margin
+    "UBPRD487",  # CET1 Ratio (standardized)
+    "UBPRD486",  # Leverage Ratio
+    "UBPRD488",  # Total Capital Ratio
     "UBPR7308",  # Equity to Assets
-    "UBPR7414",  # NPL
+    "UBPR7414",  # Non-Performing Loans
     "UBPRE019",  # Net Charge-Off Rate
     "UBPRE600",  # Loan to Deposit Ratio
+    "UBPRR031",  # CET1 Ratio (risk-based)
 ]
 
-PRIORITY_GROUPS = [
-    ["UBPRR031", "UBPRD487", "UBPR7400"],
-    ["UBPRD488", "UBPRR033"],
-    ["UBPRD486", "UBPR7408"],
-    ["UBPR7308"],
-    ["UBPRE013", "UBPRE012"],
-    ["UBPRE630"],
-    ["UBPRE018", "UBPRE003"],
-    ["UBPRE600", "UBPR7316"],
-    ["UBPR7414"],
-    ["UBPRE019"],
+# Priority groups for Executive Summary — one ratio per group shown
+# First available code in each group is selected
+_PRIORITY_GROUPS: list[list[str]] = [
+    ["UBPRR031", "UBPRD487", "UBPR7400"],   # CET1
+    ["UBPRD488", "UBPRR033"],               # Total Capital
+    ["UBPRD486", "UBPR7408"],               # Leverage
+    ["UBPR7308"],                           # Equity/Assets
+    ["UBPRE013", "UBPRE012"],               # ROA
+    ["UBPRE630"],                           # ROE
+    ["UBPRE018", "UBPRE003"],               # NIM
+    ["UBPRE600", "UBPR7316"],               # Loan/Deposit
+    ["UBPR7414"],                           # NPL
+    ["UBPRE019"],                           # Charge-off
 ]
 
-# Cache: rssd_id → list of non-null column codes
-# Only used for Executive Summary / ratio discovery, not for trend
+# In-process column cache: rssd_id → list of non-null column codes
+# Avoids repeated full-file scans for the same bank
 _column_cache: dict[str, list[str]] = {}
 
 
-def _is_ratio_value(val) -> bool:
+# Helpers
+def _is_valid_ratio(val: Any) -> bool:
+    """Return True if val is a non-zero, parseable numeric value."""
     if val is None:
         return False
     s = str(val).strip()
-    if s in ("", "0000", "0", "None", "nan", "NaN", "null"):
+    if s in ("", "0", "0000", "None", "nan", "NaN", "null", "NaT"):
         return False
     try:
         float(s)
@@ -61,51 +89,149 @@ def _is_ratio_value(val) -> bool:
         return False
 
 
-def _pick_top10(available_codes: set) -> list:
+def _pick_priority_ratios(available: set[str]) -> list[str]:
+    """Select one ratio per priority group — returns up to 10 codes."""
     result = []
-    for group in PRIORITY_GROUPS:
+    for group in _PRIORITY_GROUPS:
         for code in group:
-            if code in available_codes:
+            if code in available:
                 result.append(code)
                 break
     return result
 
 
+def _safe_float(val: Any) -> float | None:
+    """Safely convert value to float. Returns None on failure."""
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+# Service class
+
 class UBPRService:
+    """
+    Business logic layer for UBPR financial data.
+    All public methods return structured dicts — never raise unhandled exceptions.
+    """
+
+    # Availability
 
     def bank_has_data(self, rssd_id: str, quarter_date: str) -> bool:
-        """Check if a bank has any data for a quarter before querying."""
+        """
+        Check whether a bank has UBPR data for a given quarter.
+        Used as a guard before any data fetch — avoids empty chart states.
+        """
         try:
-            return _qe_bank_has_data(rssd_id, quarter_date)
+            return _bank_has_data(rssd_id, quarter_date)
         except Exception as e:
             logger.warning(f"bank_has_data check failed [{rssd_id} {quarter_date}]: {e}")
             return False
 
     def clear_cache(self) -> None:
-        """Flush the in-process DuckDB query cache."""
+        """Flush in-process caches. Called after new ingestion runs."""
         _column_cache.clear()
-        _qe_cache_clear()
+        _cache_clear()
         logger.info("UBPR service cache cleared.")
 
+    # Quarter discovery
+
+    def get_available_quarters(self) -> list[str]:
+        """
+        Return all quarters stored in R2 (source of truth).
+        Falls back to generated date list if R2 is unreachable.
+        """
+        try:
+            quarters = list_available_quarters()
+            if quarters:
+                return quarters
+            logger.warning("R2 returned empty quarter list — using fallback")
+        except Exception as e:
+            logger.warning(f"R2 unreachable for quarter listing: {e}")
+
+        return self._fallback_quarters()
+
+    def _fallback_quarters(self) -> list[str]:
+        """
+        Generate last 8 quarters from today's date.
+        Used only when R2 is unreachable — ensures API never returns empty.
+        """
+        quarter_ends = {1: "0331", 2: "0630", 3: "0930", 4: "1231"}
+        today        = date.today()
+        q            = (today.month - 1) // 3 + 1
+        year         = today.year
+        # Step back one quarter — FFIEC data lags quarter end by ~45 days
+        q -= 1
+        if q == 0:
+            q    = 4
+            year -= 1
+        dates = []
+        for _ in range(8):
+            dates.append(f"{year}{quarter_ends[q]}")
+            q -= 1
+            if q == 0:
+                q    = 4
+                year -= 1
+        return sorted(dates)
+
+    # Key ratios (Executive Summary)
+
     def get_key_ratios(self, rssd_id: str, quarter_date: str) -> dict:
-        """All non-null UBPR fields for one bank in one quarter."""
+        """
+        Fetch all non-null UBPR ratios for one bank × one quarter.
+        Returns top-10 priority ratios for Executive Summary display.
+
+        Response shape:
+        {
+            rssd_id, quarter_date,
+            ratios: { "UBPR1234": 0.0847, ... },
+            top10:  ["UBPRR031", "UBPRD488", ...]   # priority-ordered codes
+        }
+        """
+        empty = {
+            "rssd_id":      rssd_id,
+            "quarter_date": quarter_date,
+            "ratios":       {},
+            "top10":        [],
+        }
+
         try:
             df = query_all_columns(rssd_id, quarter_date)
         except Exception as e:
-            logger.error(f"query_all_columns failed [{rssd_id} {quarter_date}]: {e}")
-            return {"rssd_id": rssd_id, "quarter_date": quarter_date, "ratios": {}}
+            logger.error(f"get_key_ratios query failed [{rssd_id} {quarter_date}]: {e}")
+            return empty
 
         if df.empty:
-            return {"rssd_id": rssd_id, "quarter_date": quarter_date, "ratios": {}}
+            return empty
 
-        row = df.iloc[0].to_dict()
-        ratios = {k: v for k, v in row.items() if k not in _META_COLS and _is_ratio_value(v)}
+        try:
+            row    = df.iloc[0].to_dict()
+            ratios = {
+                k: _safe_float(v)
+                for k, v in row.items()
+                if k not in _META_COLS and _is_valid_ratio(v)
+            }
+            # Remove None values from ratios
+            ratios = {k: v for k, v in ratios.items() if v is not None}
 
-        # Warm the column cache while we have the data
-        if rssd_id not in _column_cache:
-            _column_cache[rssd_id] = [str(k) for k in ratios.keys()]
+            # Warm column cache
+            if rssd_id not in _column_cache:
+                _column_cache[rssd_id] = [str(k) for k in ratios.keys()]
 
-        return {"rssd_id": rssd_id, "quarter_date": quarter_date, "ratios": ratios}
+            top10 = _pick_priority_ratios({str(k) for k in ratios.keys()})
+
+            return {
+                "rssd_id":      rssd_id,
+                "quarter_date": quarter_date,
+                "ratios":       ratios,
+                "top10":        top10,
+            }
+        except Exception as e:
+            logger.error(f"get_key_ratios processing failed [{rssd_id} {quarter_date}]: {e}")
+            return empty
+
+    # Trend data
 
     def get_trend_data(
         self,
@@ -116,129 +242,209 @@ class UBPRService:
         codes: list[str],
     ) -> dict:
         """
-        Fetch trend data for specific metric codes across a quarter range.
+        Fetch ratio trend across a quarter range for one bank.
 
-        - codes: the exact UBPR column codes the user selected (e.g. ["UBPR7204"])
-        - Fetches ONLY those columns per quarter — fast columnar pushdown
-        - No column discovery step needed
-        - query_ratios handles schema differences between quarters internally
+        Fetches only requested codes per quarter (columnar pushdown).
+        Quarters are fetched in parallel for speed.
+        Silently skips quarters where the bank has no data.
+
+        Response shape:
+        {
+            rssd_id, from_quarter, to_quarter,
+            quarters: [...],         # all quarters in range
+            trend:    [{rssd_id, quarter_date, UBPR1234: 0.08, ...}, ...]
+        }
         """
-        quarter_dates = sorted(
-            [q for q in all_quarters if from_quarter <= q <= to_quarter],
+        empty = {
+            "rssd_id":      rssd_id,
+            "from_quarter": from_quarter,
+            "to_quarter":   to_quarter,
+            "quarters":     [],
+            "trend":        [],
+        }
+
+        if not codes:
+            return empty
+
+        # Normalize quarter range
+        start = min(from_quarter, to_quarter)
+        end   = max(from_quarter, to_quarter)
+
+        in_range = sorted(
+            [q for q in all_quarters if start <= q <= end],
             reverse=True,
         )
 
+        if not in_range:
+            return empty
+
         logger.info(
-            f"[trend] rssd={rssd_id} codes={codes} "
-            f"range={from_quarter}→{to_quarter} quarters={len(quarter_dates)}"
+            f"get_trend_data {rssd_id} codes={codes} "
+            f"range={start}→{end} quarters={len(in_range)}"
         )
 
-        if not quarter_dates:
-            return {"rssd_id": rssd_id, "trend": [], "quarters": []}
+        frames: list[pd.DataFrame] = []
 
-        if not codes:
-            return {"rssd_id": rssd_id, "trend": [], "quarters": quarter_dates}
-
-        # Parallel fetch — one small read per quarter, only requested columns
-        frames = []
-        with ThreadPoolExecutor(max_workers=6) as ex:
-            futures = {
-                ex.submit(query_ratios, rssd_id, qd, codes): qd
-                for qd in quarter_dates
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            future_map = {
+                pool.submit(query_ratios, rssd_id, qd, codes): qd
+                for qd in in_range
             }
-            for f in as_completed(futures):
-                qd = futures[f]
+            for future in as_completed(future_map):
+                qd = future_map[future]
                 try:
-                    df = f.result()
+                    df = future.result()
                     if df is not None and not df.empty:
                         frames.append(df)
-                        logger.info(f"[trend] quarter={qd} rows={len(df)}")
+                        logger.debug(f"trend quarter={qd} rows={len(df)}")
                     else:
-                        logger.warning(f"[trend] quarter={qd} returned empty")
+                        logger.debug(f"trend quarter={qd} empty — bank may not have filed")
                 except Exception as e:
-                    logger.warning(f"[trend] quarter={qd} failed: {e}")
+                    logger.warning(f"trend quarter={qd} failed: {e}")
 
-        logger.info(f"[trend] {len(frames)}/{len(quarter_dates)} quarters returned data")
+        logger.info(
+            f"get_trend_data {rssd_id}: "
+            f"{len(frames)}/{len(in_range)} quarters returned data"
+        )
 
         if not frames:
-            return {"rssd_id": rssd_id, "trend": [], "quarters": quarter_dates}
+            return {**empty, "quarters": in_range}
 
-        result = pd.concat(frames, ignore_index=True).sort_values(
-            "quarter_date", ascending=False
+        result = (
+            pd.concat(frames, ignore_index=True)
+            .sort_values("quarter_date", ascending=False)
         )
 
         return {
-            "rssd_id": rssd_id,
+            "rssd_id":      rssd_id,
             "from_quarter": from_quarter,
-            "to_quarter": to_quarter,
-            "quarters": quarter_dates,
-            "trend": result.to_dict(orient="records"),
+            "to_quarter":   to_quarter,
+            "quarters":     in_range,
+            "trend":        result.to_dict(orient="records"),
         }
 
-    def get_peer_comparison(self, rssd_id: str, quarter_date: str, peer_group: str = "all") -> dict:
-        bank_ratios = {}
-        peer_averages = {}
+    # Peer comparison
 
+    def get_peer_comparison(
+        self,
+        rssd_id: str,
+        quarter_date: str,
+        peer_group: str = "all",
+    ) -> dict:
+        """
+        Compare one bank's ratios against peer group averages.
+
+        Response shape:
+        {
+            rssd_id, quarter_date, peer_group,
+            bank_ratios:   { "UBPR1234": 0.0847, ... },
+            peer_averages: { "UBPR1234": 0.0712, ... },
+            deltas:        { "UBPR1234": 0.0135, ... }  # bank - peer
+        }
+        """
+        empty = {
+            "rssd_id":       rssd_id,
+            "quarter_date":  quarter_date,
+            "peer_group":    peer_group,
+            "bank_ratios":   {},
+            "peer_averages": {},
+            "deltas":        {},
+        }
+
+        bank_ratios: dict[str, float]   = {}
+        peer_averages: dict[str, float] = {}
+
+        # Fetch bank ratios
         try:
             df = query_all_columns(rssd_id, quarter_date)
             if not df.empty:
-                row = df.iloc[0].to_dict()
-                bank_ratios = {k: v for k, v in row.items() if k not in _META_COLS and _is_ratio_value(v)}
+                row        = df.iloc[0].to_dict()
+                bank_ratios = {
+                    str(k): v for k, v in {
+                        k: _safe_float(v)
+                        for k, v in row.items()
+                        if k not in _META_COLS and _is_valid_ratio(v)
+                    }.items()
+                    if v is not None
+                }
                 if rssd_id not in _column_cache:
-                    _column_cache[rssd_id] = [str(k) for k in bank_ratios.keys()]
+                    _column_cache[rssd_id] = list(bank_ratios.keys())
         except Exception as e:
-            logger.error(f"Bank fetch failed [{rssd_id}]: {e}")
+            logger.error(f"get_peer_comparison bank fetch failed [{rssd_id}]: {e}")
 
+        # Fetch peer averages for codes present in bank data
         peer_codes = [c for c in _PEER_CODES if c in bank_ratios]
         if peer_codes:
             try:
                 df = query_peer_averages(quarter_date, peer_codes)
                 if not df.empty:
                     row = df.iloc[0].to_dict()
-                    peer_averages = {k: round(float(v), 6) for k, v in row.items() if v is not None}
+                    peer_averages = {
+                        str(k): v for k, v in {
+                            k: _safe_float(v)
+                            for k, v in row.items()
+                        }.items()
+                        if v is not None
+                    }
             except Exception as e:
-                logger.error(f"Peer averages failed [{quarter_date}]: {e}")
+                logger.error(
+                    f"get_peer_comparison peer averages failed [{quarter_date}]: {e}"
+                )
 
-        return {
-            "rssd_id": rssd_id,
-            "quarter_date": quarter_date,
-            "peer_group": peer_group,
-            "bank_ratios": bank_ratios,
-            "peer_averages": peer_averages,
+        # Compute deltas (bank - peer)
+        deltas = {
+            k: round(bank_ratios[k] - peer_averages[k], 6)
+            for k in bank_ratios
+            if k in peer_averages
         }
 
+        return {
+            "rssd_id":       rssd_id,
+            "quarter_date":  quarter_date,
+            "peer_group":    peer_group,
+            "bank_ratios":   bank_ratios,
+            "peer_averages": peer_averages,
+            "deltas":        deltas,
+        }
+
+    # All fields (custom ratio builder)
+
     def get_all_fields(self, rssd_id: str, quarter_date: str) -> dict:
+        """
+        Fetch every UBPR field for one bank × one quarter.
+        Used by the custom ratio builder tab.
+
+        Response shape:
+        {
+            rssd_id, quarter_date,
+            total_fields: 2808,
+            fields: { "UBPR1234": 0.08, ... }
+        }
+        """
+        empty = {
+            "rssd_id":      rssd_id,
+            "quarter_date": quarter_date,
+            "total_fields": 0,
+            "fields":       {},
+        }
+
         try:
             df = query_all_columns(rssd_id, quarter_date)
         except Exception as e:
-            logger.error(f"query_all_columns failed [{rssd_id} {quarter_date}]: {e}")
-            return {"rssd_id": rssd_id, "quarter_date": quarter_date, "fields": {}}
+            logger.error(f"get_all_fields query failed [{rssd_id} {quarter_date}]: {e}")
+            return empty
+
         if df.empty:
-            return {"rssd_id": rssd_id, "quarter_date": quarter_date, "fields": {}}
-        row = df.iloc[0].to_dict()
-        return {"rssd_id": rssd_id, "quarter_date": quarter_date, "total_fields": len(row), "fields": row}
+            return empty
 
-    def get_available_quarters(self) -> list:
         try:
-            return list_available_quarters()
+            row = df.iloc[0].to_dict()
+            return {
+                "rssd_id":      rssd_id,
+                "quarter_date": quarter_date,
+                "total_fields": len(row),
+                "fields":       row,
+            }
         except Exception as e:
-            logger.warning(f"R2 unreachable, using fallback: {e}")
-            return self._fallback_quarters()
-
-    def _fallback_quarters(self) -> list:
-        quarter_ends = {1: "0331", 2: "0630", 3: "0930", 4: "1231"}
-        today = date.today()
-        q = (today.month - 1) // 3 + 1
-        year = today.year
-        q -= 1
-        if q == 0:
-            q = 4
-            year -= 1
-        dates = []
-        for _ in range(8):
-            dates.append(f"{year}{quarter_ends[q]}")
-            q -= 1
-            if q == 0:
-                q = 4
-                year -= 1
-        return sorted(dates)
+            logger.error(f"get_all_fields processing failed: {e}")
+            return empty

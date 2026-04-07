@@ -7,7 +7,7 @@
  * Banks that don't report a code simply won't have it - no hardcoding needed.
  */
 
-// ── Category colors ───────────────────────────────────────────────────────────
+// ── Category colors──────────
 export const CATEGORY_COLORS = {
   "Capital":       "#115740",
   "Profitability": "#1e3a5f",
@@ -34,7 +34,7 @@ export const RULE_CHANGES = [
   { date: "20150101", label: "Basel III effective",  note: "New capital ratio definitions - affects Tier 1 and CET1 comparisons"     },
 ];
 
-// ── Priority display codes ────────────────────────────────────────────────────
+// ── Priority display codes───
 // When displaying a bank's ratios, show these first (if they exist for the bank)
 // and in this order. Then show everything else alphabetically.
 export const PRIORITY_CODES = [
@@ -63,7 +63,7 @@ export const PRIORITY_CODES = [
 // Covers the most commonly reported codes across all bank types.
 // Unknown codes fall back to their raw code name with category "Other".
 export const UBPR_LOOKUP = {
-  // ── Capital ─────────────────────────────────────────────────────────────────
+  // ── Capital────────────────
   "UBPRD486": { label: "Leverage Ratio",               category: "Capital",       higherBetter: true  },
   "UBPRD487": { label: "Tier 1 Capital Ratio",         category: "Capital",       higherBetter: true  },
   "UBPRD488": { label: "Total Capital Ratio",          category: "Capital",       higherBetter: true  },
@@ -83,7 +83,7 @@ export const UBPR_LOOKUP = {
   "UBPRE641": { label: "Total Intangibles to Equity",  category: "Capital",       higherBetter: false },
   "UBPRJ245": { label: "Equity + Min Interests / Assets", category: "Capital",   higherBetter: true  },
 
-  // ── Profitability ────────────────────────────────────────────────────────────
+  // ── Profitability───────────
   "UBPRE001": { label: "Interest Income (TE) / Assets",      category: "Profitability", higherBetter: true  },
   "UBPRE002": { label: "Interest Expense / Assets",          category: "Profitability", higherBetter: false },
   "UBPRE003": { label: "Net Interest Income (TE) / Assets",  category: "Profitability", higherBetter: true  },
@@ -105,12 +105,12 @@ export const UBPR_LOOKUP = {
   "UBPR7205": { label: "Total Capital input",                category: "Profitability", higherBetter: true  },
   "UBPR7206": { label: "Tier 1 input",                       category: "Profitability", higherBetter: true  },
 
-  // ── Liquidity ────────────────────────────────────────────────────────────────
+  // ── Liquidity───────────────
   "UBPRE600": { label: "Loan to Deposit Ratio",              category: "Liquidity",     higherBetter: false },
   "UBPR7316": { label: "Loan to Deposit (alt)",              category: "Liquidity",     higherBetter: false },
   "UBPRE015": { label: "Avg Int-Bearing Funds / Assets",     category: "Liquidity",     higherBetter: null  },
 
-  // ── Asset Quality ────────────────────────────────────────────────────────────
+  // ── Asset Quality───────────
   "UBPR7414": { label: "Non-Performing Loans (NPL %)",       category: "Asset Quality", higherBetter: false },
   "UBPRE019": { label: "Net Charge-Off Rate",                category: "Asset Quality", higherBetter: false },
   "UBPRE020": { label: "Earnings Coverage of Net Losses (x)", category: "Asset Quality", higherBetter: true },
@@ -121,7 +121,7 @@ export const UBPR_LOOKUP = {
   "UBPRE547": { label: "Total Past Due + Nonaccrual %",      category: "Asset Quality", higherBetter: false },
   "UBPRE549": { label: "Noncurrent + OREO / Loans + OREO",   category: "Asset Quality", higherBetter: false },
 
-  // ── Growth ───────────────────────────────────────────────────────────────────
+  // ── Growth──────────────────
   "UBPR7316_growth": { label: "Loan Growth",                 category: "Growth",        higherBetter: true  },
 };
 

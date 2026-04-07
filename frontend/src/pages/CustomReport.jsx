@@ -127,7 +127,7 @@ function SyncScrollTable({ children, tableWidth, accentColor }) {
   );
 }
 
-// ─── helpers ──────────────────────────────────────────────────
+// ─── helpers─
 function fmt(v) {
   const n = parseFloat(String(v ?? "").replace(/,/g, ""));
   if (isNaN(n)) return String(v ?? "") || "-";
@@ -850,7 +850,7 @@ function StepPreview({ allCatalogs, selectedBankIds, selectedPeriods, selectedFi
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────
+// ─── Main────
 export default function CustomReport({ selectedBanks, selectedPeriods, banksById }) {
   const periods = selectedPeriods || [];
   const bankIds = selectedBanks  || [];
