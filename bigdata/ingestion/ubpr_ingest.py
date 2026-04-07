@@ -708,11 +708,19 @@ def _upload_per_bank_parallel(s3, df: pd.DataFrame, quarter_date: str) -> int:
         serialized[str(rssd_id)] = buf.getvalue()
 
     # Upload sequentially — avoids boto3/R2 connection pool deadlocks
-    for rssd_id, data in serialized.items():
+    total_banks = len(serialized)
+    log_interval = max(1, total_banks // 10)  # log every 10%
+
+    for idx, (rssd_id, data) in enumerate(serialized.items(), 1):
         try:
             key = _BANK_KEY.format(rssd_id=rssd_id, quarter=quarter_date)
             s3.put_object(Bucket=BUCKET, Key=key, Body=data)
             total_bytes += len(data)
+            if idx % log_interval == 0 or idx == total_banks:
+                logger.info(
+                    f"  Bank upload progress: {idx}/{total_banks} "
+                    f"({idx*100//total_banks}%) — {total_bytes/1024:.0f} KB written"
+                )
         except Exception as e:
             errors += 1
             logger.debug(f"Per-bank upload failed for {rssd_id}: {e}")
@@ -721,44 +729,29 @@ def _upload_per_bank_parallel(s3, df: pd.DataFrame, quarter_date: str) -> int:
         logger.warning(f"{errors} per-bank upload failures for {quarter_date} (non-fatal)")
 
     logger.info(
-        f"Per-bank upload: {len(groups) - errors}/{len(groups)} banks, "
+        f"Per-bank upload complete: {len(groups) - errors}/{len(groups)} banks, "
         f"{total_bytes/1024:.0f} KB total"
     )
     return total_bytes
 
 
 def _upload_bytes(s3, key: str, data: bytes, attempts: int = 5) -> None:
-    """Upload bytes to R2 with retry. Uses multipart for files > 10 MB."""
-    CHUNK = 10 * 1024 * 1024
-
-    if len(data) <= CHUNK:
-        _r2_retry(lambda: s3.put_object(Bucket=BUCKET, Key=key, Body=data), attempts)
-        return
-
-    # Multipart for large files
-    upload_id = s3.create_multipart_upload(Bucket=BUCKET, Key=key)["UploadId"]
-    parts     = []
-    try:
-        for i, offset in enumerate(range(0, len(data), CHUNK), 1):
-            chunk = data[offset: offset + CHUNK]
-            resp  = _r2_retry(
-                lambda c=chunk, n=i: s3.upload_part(
-                    Bucket=BUCKET, Key=key, UploadId=upload_id,
-                    PartNumber=n, Body=c
-                ),
-                attempts,
-            )
-            parts.append({"PartNumber": i, "ETag": resp["ETag"]})
-        s3.complete_multipart_upload(
-            Bucket=BUCKET, Key=key,
-            MultipartUpload={"Parts": parts}, UploadId=upload_id,
-        )
-    except Exception:
+    """
+    Upload bytes to R2.
+    Uses single put_object for all sizes — avoids multipart deadlocks.
+    boto3's put_object handles large files correctly via streaming.
+    """
+    last_err = None
+    for attempt in range(1, attempts + 1):
         try:
-            s3.abort_multipart_upload(Bucket=BUCKET, Key=key, UploadId=upload_id)
-        except Exception:
-            pass
-        raise
+            s3.put_object(Bucket=BUCKET, Key=key, Body=data)
+            return
+        except Exception as e:
+            last_err = e
+            wait = 3 * attempt
+            logger.warning(f"Upload attempt {attempt}/{attempts} failed for {key}: {e}. Retrying in {wait}s")
+            time.sleep(wait)
+    raise RuntimeError(f"Upload failed after {attempts} attempts: {last_err}") from last_err
 
 
 # 9. Main pipeline orchestration
