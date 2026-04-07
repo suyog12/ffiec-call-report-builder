@@ -1,8 +1,10 @@
 name: UBPR Data Ingestion
 
 on:
-  schedule:
-    - cron: "0 8 15 1,4,7,10 *"
+  push:
+    branches:
+      - main
+      - temp-bigdata-changes
 
   workflow_dispatch:
     inputs:
@@ -24,6 +26,9 @@ on:
         description: "Budget cap in GB"
         required: false
         default: "50"
+
+  schedule:
+    - cron: "0 8 15 1,4,7,10 *"
 
 jobs:
   ingest:
