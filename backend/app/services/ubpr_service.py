@@ -1,14 +1,3 @@
-"""
-ubpr_service.py
-
-Production-grade UBPR service.
-
-Trend fetching strategy:
-- User selects specific metric codes + quarter range
-- Backend fetches ONLY those codes per quarter (columnar pushdown)
-- No column discovery step - fast, minimal R2 reads
-"""
-
 import logging
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,7 +10,10 @@ from queryengine.query_engine import (
     query_all_columns,
     query_ratios,
     query_peer_averages,
+    query_multi_bank,
     list_available_quarters,
+    bank_has_data as _qe_bank_has_data,
+    cache_clear as _qe_cache_clear,
 )
 
 _META_COLS = {"rssd_id", "quarter_date"}
@@ -81,6 +73,20 @@ def _pick_top10(available_codes: set) -> list:
 
 class UBPRService:
 
+    def bank_has_data(self, rssd_id: str, quarter_date: str) -> bool:
+        """Check if a bank has any data for a quarter before querying."""
+        try:
+            return _qe_bank_has_data(rssd_id, quarter_date)
+        except Exception as e:
+            logger.warning(f"bank_has_data check failed [{rssd_id} {quarter_date}]: {e}")
+            return False
+
+    def clear_cache(self) -> None:
+        """Flush the in-process DuckDB query cache."""
+        _column_cache.clear()
+        _qe_cache_clear()
+        logger.info("UBPR service cache cleared.")
+
     def get_key_ratios(self, rssd_id: str, quarter_date: str) -> dict:
         """All non-null UBPR fields for one bank in one quarter."""
         try:
@@ -113,7 +119,7 @@ class UBPRService:
         Fetch trend data for specific metric codes across a quarter range.
 
         - codes: the exact UBPR column codes the user selected (e.g. ["UBPR7204"])
-        - Fetches ONLY those columns per quarter - fast columnar pushdown
+        - Fetches ONLY those columns per quarter — fast columnar pushdown
         - No column discovery step needed
         - query_ratios handles schema differences between quarters internally
         """
@@ -133,7 +139,7 @@ class UBPRService:
         if not codes:
             return {"rssd_id": rssd_id, "trend": [], "quarters": quarter_dates}
 
-        # Parallel fetch - one small read per quarter, only requested columns
+        # Parallel fetch — one small read per quarter, only requested columns
         frames = []
         with ThreadPoolExecutor(max_workers=6) as ex:
             futures = {
@@ -186,7 +192,7 @@ class UBPRService:
         peer_codes = [c for c in _PEER_CODES if c in bank_ratios]
         if peer_codes:
             try:
-                df = query_peer_averages(quarter_date, peer_codes, exclude_rssd_id=rssd_id, peer_group=peer_group)
+                df = query_peer_averages(quarter_date, peer_codes)
                 if not df.empty:
                     row = df.iloc[0].to_dict()
                     peer_averages = {k: round(float(v), 6) for k, v in row.items() if v is not None}
