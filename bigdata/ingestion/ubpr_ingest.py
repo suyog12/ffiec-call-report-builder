@@ -1,6 +1,6 @@
 ﻿"""
-ubpr_ingest.py
-================
+ubpr_ingest.py  
+===============
 
 Architecture
 ------------
@@ -693,6 +693,9 @@ def _upload_per_bank_parallel(s3, df: pd.DataFrame, quarter_date: str) -> int:
     """
     Write one Parquet file per bank in parallel using a thread pool.
     These tiny files (~10KB each) enable O(1) bank lookups instead of full scans.
+
+    Uses direct put_object (no retry wrapper) to avoid connection pool deadlocks.
+    4 workers is safe with a pool size of 50 connections.
     """
     if "rssd_id" not in df.columns:
         return 0
@@ -701,17 +704,17 @@ def _upload_per_bank_parallel(s3, df: pd.DataFrame, quarter_date: str) -> int:
     errors      = 0
     groups      = list(df.groupby("rssd_id"))
 
-    def _write_one(rssd_id, bank_df):
-        key = _BANK_KEY.format(rssd_id=rssd_id, quarter=quarter_date)
-        buf = io.BytesIO()
+    def _write_one(rssd_id: object, bank_df: pd.DataFrame) -> int:
+        key  = _BANK_KEY.format(rssd_id=str(rssd_id), quarter=quarter_date)
+        buf  = io.BytesIO()
         pq.write_table(
             pa.Table.from_pandas(bank_df.reset_index(drop=True)),
             buf,
             compression="snappy",
         )
-        buf.seek(0)
         data = buf.getvalue()
-        _upload_bytes(s3, key, data, attempts=2)  # fewer retries for small files
+        # Direct put_object — small files never need multipart or retry wrapper
+        s3.put_object(Bucket=BUCKET, Key=key, Body=data)
         return len(data)
 
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -950,8 +953,7 @@ def run(
     total_elapsed = time.time() - run_start
 
     # Step 6: Write updated metadata
-    all_succeeded = succeeded_download + succeeded_backfill
-    updated_r2    = list_r2_quarters(s3)
+    updated_r2 = list_r2_quarters(s3)
     write_metadata(s3, {
         "last_run_utc":              datetime.now(timezone.utc).isoformat(),
         "last_run_mode":             "full_history" if full_history else

@@ -1,10 +1,17 @@
 name: UBPR Data Ingestion
 
 on:
+  schedule:
+    - cron: "0 8 15 1,4,7,10 *"
+
+  # Push trigger — runs incremental + backfill automatically on these branches
   push:
     branches:
       - main
       - temp-bigdata-changes
+    paths:
+      - "bigdata/ingestion/ubpr_ingest.py"
+      - ".github/workflows/ubpr_ingest.yml"
 
   workflow_dispatch:
     inputs:
@@ -26,9 +33,6 @@ on:
         description: "Budget cap in GB"
         required: false
         default: "50"
-
-  schedule:
-    - cron: "0 8 15 1,4,7,10 *"
 
 jobs:
   ingest:
@@ -123,31 +127,148 @@ jobs:
       # Enables sub-100ms queries instead of scanning 30MB files
       - name: Backfill per-bank files
         if: github.event.inputs.mode != 'dry-run'
+        timeout-minutes: 300
         run: |
           cd bigdata
           python - << 'PYEOF'
-          import sys, os, logging
-          sys.path.insert(0, '.')
+          import sys, os, io, logging
+          import boto3
+          import duckdb
+          import pandas as pd
+          import pyarrow as pa
+          import pyarrow.parquet as pq
+          from concurrent.futures import ThreadPoolExecutor, as_completed
+          from botocore.config import Config
           from dotenv import load_dotenv
+
           load_dotenv('.env')
 
           logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
           logger = logging.getLogger('backfill')
 
-          from ingestion.ubpr_ingest import (
-              get_s3, list_r2_quarters,
-              check_r2_quarter_state,
-              backfill_per_bank_from_full_quarter,
-          )
+          S3_ENDPOINT    = os.environ['R2_ENDPOINT'].rstrip('/')
+          AWS_ACCESS_KEY = os.environ['R2_ACCESS_KEY_ID']
+          AWS_SECRET_KEY = os.environ['R2_SECRET_ACCESS_KEY']
+          BUCKET         = os.environ['R2_BUCKET']
+          S3_HOST        = S3_ENDPOINT.replace('https://','').replace('http://','').rstrip('/')
 
+          def get_s3():
+              return boto3.client(
+                  's3',
+                  endpoint_url=S3_ENDPOINT,
+                  aws_access_key_id=AWS_ACCESS_KEY,
+                  aws_secret_access_key=AWS_SECRET_KEY,
+                  region_name='auto',
+                  config=Config(max_pool_connections=20,
+                                retries={'max_attempts': 3, 'mode': 'adaptive'}),
+              )
+
+          def list_r2_quarters(s3):
+              stored = {}
+              paginator = s3.get_paginator('list_objects_v2')
+              for page in paginator.paginate(Bucket=BUCKET, Prefix='ubpr/year='):
+                  for obj in page.get('Contents', []):
+                      key = obj['Key']
+                      if not key.endswith('/data.parquet'):
+                          continue
+                      parts = key.split('/')
+                      if len(parts) != 4:
+                          continue
+                      quarter = parts[2].replace('quarter=', '')
+                      if len(quarter) == 8 and quarter.isdigit():
+                          stored[quarter] = obj['Size']
+              return stored
+
+          def has_per_bank_files(s3, quarter_date):
+              """Fast check using DuckDB to sample RSSDIDs then HEAD requests."""
+              year = quarter_date[:4]
+              full_url = f"s3://{BUCKET}/ubpr/year={year}/quarter={quarter_date}/data.parquet"
+              try:
+                  con = duckdb.connect()
+                  con.execute("INSTALL httpfs; LOAD httpfs;")
+                  con.execute(f"SET s3_endpoint = '{S3_HOST}';")
+                  con.execute(f"SET s3_access_key_id = '{AWS_ACCESS_KEY}';")
+                  con.execute(f"SET s3_secret_access_key = '{AWS_SECRET_KEY}';")
+                  con.execute("SET s3_region = 'auto';")
+                  con.execute("SET s3_use_ssl = true;")
+                  con.execute("SET s3_url_style = 'path';")
+                  rows = con.execute(
+                      f"SELECT rssd_id FROM read_parquet('{full_url}') LIMIT 3"
+                  ).fetchall()
+                  con.close()
+                  for (rssd_id,) in rows:
+                      try:
+                          s3.head_object(Bucket=BUCKET,
+                              Key=f"ubpr/by_bank/{rssd_id}/{quarter_date}.parquet")
+                          return True
+                      except Exception:
+                          continue
+                  return False
+              except Exception as e:
+                  logger.warning(f"has_per_bank_files check failed for {quarter_date}: {e}")
+                  return False
+
+          def backfill_quarter(s3, quarter_date):
+              year = quarter_date[:4]
+              full_url = f"s3://{BUCKET}/ubpr/year={year}/quarter={quarter_date}/data.parquet"
+
+              # Read full-quarter file via DuckDB
+              con = duckdb.connect()
+              try:
+                  con.execute("INSTALL httpfs; LOAD httpfs;")
+                  con.execute(f"SET s3_endpoint = '{S3_HOST}';")
+                  con.execute(f"SET s3_access_key_id = '{AWS_ACCESS_KEY}';")
+                  con.execute(f"SET s3_secret_access_key = '{AWS_SECRET_KEY}';")
+                  con.execute("SET s3_region = 'auto';")
+                  con.execute("SET s3_use_ssl = true;")
+                  con.execute("SET s3_url_style = 'path';")
+                  df = con.execute(f"SELECT * FROM read_parquet('{full_url}')").df()
+              finally:
+                  con.close()
+
+              if df.empty:
+                  return 0
+
+              # Upload per-bank files with controlled concurrency
+              groups = list(df.groupby('rssd_id'))
+              total_bytes = 0
+              errors = 0
+
+              def write_one(rssd_id, bank_df):
+                  key = f"ubpr/by_bank/{rssd_id}/{quarter_date}.parquet"
+                  buf = io.BytesIO()
+                  pq.write_table(
+                      pa.Table.from_pandas(bank_df.reset_index(drop=True)),
+                      buf, compression='snappy'
+                  )
+                  data = buf.getvalue()
+                  s3.put_object(Bucket=BUCKET, Key=key, Body=data)
+                  return len(data)
+
+              # Use 4 workers — well within connection pool of 20
+              with ThreadPoolExecutor(max_workers=4) as pool:
+                  futures = {pool.submit(write_one, r, b): r for r, b in groups}
+                  for future in as_completed(futures):
+                      try:
+                          total_bytes += future.result()
+                      except Exception as e:
+                          errors += 1
+                          logger.debug(f"Upload failed for {futures[future]}: {e}")
+
+              logger.info(
+                  f"  {quarter_date}: {len(groups)-errors}/{len(groups)} banks, "
+                  f"{total_bytes/1024:.0f} KB"
+              )
+              return total_bytes
+
+          # Main
           s3 = get_s3()
           r2_quarters = list_r2_quarters(s3)
           logger.info(f"Found {len(r2_quarters)} full-quarter files in R2")
 
           need_backfill = []
           for q in sorted(r2_quarters.keys(), reverse=True):
-              state = check_r2_quarter_state(s3, q)
-              if state['has_full_quarter'] and not state['has_per_bank']:
+              if not has_per_bank_files(s3, q):
                   need_backfill.append(q)
 
           logger.info(f"Quarters needing per-bank backfill: {len(need_backfill)}")
@@ -157,21 +278,20 @@ jobs:
               sys.exit(0)
 
           succeeded, failed, total_bytes = [], [], 0
-
           for i, q in enumerate(need_backfill, 1):
               logger.info(f"[{i}/{len(need_backfill)}] Backfilling {q}...")
               try:
-                  b = backfill_per_bank_from_full_quarter(s3, q)
+                  b = backfill_quarter(s3, q)
                   total_bytes += b
                   succeeded.append(q)
-                  logger.info(f"  {q}: {b/1024:.0f} KB written")
               except Exception as e:
                   logger.error(f"  {q} failed: {e}")
                   failed.append(q)
 
-          logger.info(f"Backfill done: {len(succeeded)} succeeded, {len(failed)} failed, {total_bytes/1024/1024:.1f} MB written")
-          if failed:
-              logger.warning(f"Failed quarters: {failed}")
+          logger.info(
+              f"Backfill complete: {len(succeeded)} succeeded, "
+              f"{len(failed)} failed, {total_bytes/1024/1024:.1f} MB written"
+          )
           PYEOF
 
       - name: Verify R2 state
