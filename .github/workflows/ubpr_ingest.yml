@@ -133,7 +133,6 @@ jobs:
           python - << 'PYEOF'
           import sys, os, io, logging
           import boto3
-          import duckdb
           import pandas as pd
           import pyarrow as pa
           import pyarrow.parquet as pq
@@ -150,7 +149,6 @@ jobs:
           AWS_ACCESS_KEY = os.environ['R2_ACCESS_KEY_ID']
           AWS_SECRET_KEY = os.environ['R2_SECRET_ACCESS_KEY']
           BUCKET         = os.environ['R2_BUCKET']
-          S3_HOST        = S3_ENDPOINT.replace('https://','').replace('http://','').rstrip('/')
 
           def get_s3():
               return boto3.client(
@@ -180,51 +178,39 @@ jobs:
               return stored
 
           def has_per_bank_files(s3, quarter_date):
-              """Fast check using DuckDB to sample RSSDIDs then HEAD requests."""
-              year = quarter_date[:4]
-              full_url = f"s3://{BUCKET}/ubpr/year={year}/quarter={quarter_date}/data.parquet"
+              """Fast check: download first 1KB of parquet, extract an RSSD ID, HEAD check."""
               try:
-                  con = duckdb.connect()
-                  con.execute("INSTALL httpfs; LOAD httpfs;")
-                  con.execute(f"SET s3_endpoint = '{S3_HOST}';")
-                  con.execute(f"SET s3_access_key_id = '{AWS_ACCESS_KEY}';")
-                  con.execute(f"SET s3_secret_access_key = '{AWS_SECRET_KEY}';")
-                  con.execute("SET s3_region = 'auto';")
-                  con.execute("SET s3_use_ssl = true;")
-                  con.execute("SET s3_url_style = 'path';")
-                  rows = con.execute(
-                      f"SELECT rssd_id FROM read_parquet('{full_url}') LIMIT 3"
-                  ).fetchall()
-                  con.close()
-                  for (rssd_id,) in rows:
-                      try:
-                          s3.head_object(Bucket=BUCKET,
-                              Key=f"ubpr/by_bank/{rssd_id}/{quarter_date}.parquet")
+                  # List just 1 object under by_bank that ends with this quarter
+                  # Use list_objects with a broad prefix and filter
+                  result = s3.list_objects_v2(
+                      Bucket=BUCKET,
+                      Prefix=f"ubpr/by_bank/",
+                      MaxKeys=1000,
+                  )
+                  for obj in result.get("Contents", []):
+                      if obj["Key"].endswith(f"/{quarter_date}.parquet"):
                           return True
-                      except Exception:
-                          continue
                   return False
               except Exception as e:
                   logger.warning(f"has_per_bank_files check failed for {quarter_date}: {e}")
                   return False
 
           def backfill_quarter(s3, quarter_date):
+              import time as _time
+              t0 = _time.time()
               year = quarter_date[:4]
-              full_url = f"s3://{BUCKET}/ubpr/year={year}/quarter={quarter_date}/data.parquet"
+              s3_key = f"ubpr/year={year}/quarter={quarter_date}/data.parquet"
 
-              # Read full-quarter file via DuckDB
-              con = duckdb.connect()
-              try:
-                  con.execute("INSTALL httpfs; LOAD httpfs;")
-                  con.execute(f"SET s3_endpoint = '{S3_HOST}';")
-                  con.execute(f"SET s3_access_key_id = '{AWS_ACCESS_KEY}';")
-                  con.execute(f"SET s3_secret_access_key = '{AWS_SECRET_KEY}';")
-                  con.execute("SET s3_region = 'auto';")
-                  con.execute("SET s3_use_ssl = true;")
-                  con.execute("SET s3_url_style = 'path';")
-                  df = con.execute(f"SELECT * FROM read_parquet('{full_url}')").df()
-              finally:
-                  con.close()
+              # Download via boto3 get_object (fast — single streaming download)
+              logger.info(f"  Downloading {quarter_date}...")
+              obj   = s3.get_object(Bucket=BUCKET, Key=s3_key)
+              data  = obj["Body"].read()
+              logger.info(f"  Downloaded {len(data)/1024/1024:.1f} MB in {_time.time()-t0:.1f}s")
+
+              # Parse with pyarrow (local, no network)
+              table = pa.read_table(io.BytesIO(data))
+              df    = table.to_pandas()
+              logger.info(f"  Parsed {len(df):,} banks, {len(df.columns)} columns")
 
               if df.empty:
                   return 0
@@ -234,20 +220,25 @@ jobs:
               total_bytes = 0
               errors = 0
 
-              def write_one(rssd_id, bank_df):
-                  key = f"ubpr/by_bank/{rssd_id}/{quarter_date}.parquet"
+              # Pre-serialize ALL bank files to bytes first (CPU-bound, sequential)
+              # Then upload in parallel (IO-bound)
+              serialized = {}
+              for rssd_id, bank_df in groups:
                   buf = io.BytesIO()
                   pq.write_table(
                       pa.Table.from_pandas(bank_df.reset_index(drop=True)),
                       buf, compression='snappy'
                   )
-                  data = buf.getvalue()
+                  serialized[str(rssd_id)] = buf.getvalue()
+
+              # Upload in parallel — pure IO, no CPU contention
+              def upload_one(rssd_id, data):
+                  key = f"ubpr/by_bank/{rssd_id}/{quarter_date}.parquet"
                   s3.put_object(Bucket=BUCKET, Key=key, Body=data)
                   return len(data)
 
-              # Use 4 workers — well within connection pool of 20
-              with ThreadPoolExecutor(max_workers=4) as pool:
-                  futures = {pool.submit(write_one, r, b): r for r, b in groups}
+              with ThreadPoolExecutor(max_workers=8) as pool:
+                  futures = {pool.submit(upload_one, r, d): r for r, d in serialized.items()}
                   for future in as_completed(futures):
                       try:
                           total_bytes += future.result()

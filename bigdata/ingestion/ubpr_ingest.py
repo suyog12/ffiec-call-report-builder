@@ -1,6 +1,7 @@
 ﻿"""
-ubpr_ingest.py  
-===============
+ubpr_ingest.py  —  FFIEC UBPR Ingestion Pipeline  (PySpark edition)
+====================================================================
+William & Mary MSBA Team 9 · Class of 2026
 
 Architecture
 ------------
@@ -282,33 +283,31 @@ def backfill_per_bank_from_full_quarter(s3, quarter_date: str) -> int:
     Read an existing full-quarter Parquet from R2 and split it into
     per-bank files. Used when full-quarter exists but per-bank files don't.
 
-    This avoids re-downloading ~120MB from FFIEC — we already have the data.
+    Uses boto3 get_object (fast single download) instead of DuckDB httpfs
+    to avoid slow streaming reads and connection overhead.
     Returns bytes written.
     """
-    import duckdb
     year    = quarter_date[:4]
-    full_url = f"s3://{BUCKET}/ubpr/year={year}/quarter={quarter_date}/data.parquet"
+    s3_key  = f"ubpr/year={year}/quarter={quarter_date}/data.parquet"
 
-    logger.info(f"Reading full-quarter file to backfill per-bank files: {quarter_date}")
+    logger.info(f"Downloading {quarter_date} from R2 for backfill...")
+    t0 = time.time()
 
-    # Use DuckDB to read from R2 directly
-    S3_HOST = S3_ENDPOINT.replace("https://", "").replace("http://", "").rstrip("/")
-    con = duckdb.connect()
     try:
-        con.execute("INSTALL httpfs; LOAD httpfs;")
-        con.execute(f"SET s3_endpoint = '{S3_HOST}';")
-        con.execute(f"SET s3_access_key_id = '{AWS_ACCESS_KEY}';")
-        con.execute(f"SET s3_secret_access_key = '{AWS_SECRET_KEY}';")
-        con.execute("SET s3_region = 'auto';")
-        con.execute("SET s3_use_ssl = true;")
-        con.execute("SET s3_url_style = 'path';")
-
-        df = con.execute(f"SELECT * FROM read_parquet('{full_url}')").df()
+        obj  = s3.get_object(Bucket=BUCKET, Key=s3_key)
+        data = obj["Body"].read()
     except Exception as e:
-        logger.error(f"Failed to read full-quarter file for {quarter_date}: {e}")
+        logger.error(f"Failed to download {quarter_date} from R2: {e}")
         return 0
-    finally:
-        con.close()
+
+    logger.info(f"Downloaded {len(data)/1024/1024:.1f} MB in {time.time()-t0:.1f}s")
+
+    try:
+        table = pq.read_table(io.BytesIO(data))
+        df    = table.to_pandas()
+    except Exception as e:
+        logger.error(f"Failed to parse Parquet for {quarter_date}: {e}")
+        return 0
 
     if df.empty:
         logger.warning(f"Full-quarter file empty for {quarter_date}")
@@ -321,7 +320,7 @@ def backfill_per_bank_from_full_quarter(s3, quarter_date: str) -> int:
     bank_bytes = _upload_per_bank_parallel(s3, df, quarter_date)
     logger.info(
         f"Backfill complete for {quarter_date}: "
-        f"{bank_bytes/1024:.0f} KB written"
+        f"{bank_bytes/1024:.0f} KB written in {time.time()-t0:.1f}s total"
     )
     return bank_bytes
 
