@@ -208,7 +208,7 @@ jobs:
               logger.info(f"  Downloaded {len(data)/1024/1024:.1f} MB in {_time.time()-t0:.1f}s")
 
               # Parse with pyarrow (local, no network)
-              table = pa.read_table(io.BytesIO(data))
+              table = pq.read_table(io.BytesIO(data))
               df    = table.to_pandas()
               logger.info(f"  Parsed {len(df):,} banks, {len(df.columns)} columns")
 
