@@ -225,11 +225,15 @@ jobs:
                   serialized[str(rssd_id)] = buf.getvalue()
 
               # Upload sequentially — avoids boto3 thread-safety deadlocks with R2
-              for rssd_id, file_data in serialized.items():
+              total_banks = len(serialized)
+              log_interval = max(1, total_banks // 10)
+              for idx, (rssd_id, file_data) in enumerate(serialized.items(), 1):
                   try:
                       key = f"ubpr/by_bank/{rssd_id}/{quarter_date}.parquet"
                       s3.put_object(Bucket=BUCKET, Key=key, Body=file_data)
                       total_bytes += len(file_data)
+                      if idx % log_interval == 0 or idx == total_banks:
+                          logger.info(f"    Bank {idx}/{total_banks} ({idx*100//total_banks}%) — {total_bytes/1024:.0f} KB")
                   except Exception as e:
                       errors += 1
                       logger.debug(f"Upload failed for {rssd_id}: {e}")
