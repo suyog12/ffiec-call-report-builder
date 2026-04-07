@@ -136,7 +136,6 @@ jobs:
           import pandas as pd
           import pyarrow as pa
           import pyarrow.parquet as pq
-          from concurrent.futures import ThreadPoolExecutor, as_completed
           from botocore.config import Config
           from dotenv import load_dotenv
 
@@ -231,20 +230,15 @@ jobs:
                   )
                   serialized[str(rssd_id)] = buf.getvalue()
 
-              # Upload in parallel — pure IO, no CPU contention
-              def upload_one(rssd_id, data):
-                  key = f"ubpr/by_bank/{rssd_id}/{quarter_date}.parquet"
-                  s3.put_object(Bucket=BUCKET, Key=key, Body=data)
-                  return len(data)
-
-              with ThreadPoolExecutor(max_workers=8) as pool:
-                  futures = {pool.submit(upload_one, r, d): r for r, d in serialized.items()}
-                  for future in as_completed(futures):
-                      try:
-                          total_bytes += future.result()
-                      except Exception as e:
-                          errors += 1
-                          logger.debug(f"Upload failed for {futures[future]}: {e}")
+              # Upload sequentially — avoids boto3 thread-safety deadlocks with R2
+              for rssd_id, file_data in serialized.items():
+                  try:
+                      key = f"ubpr/by_bank/{rssd_id}/{quarter_date}.parquet"
+                      s3.put_object(Bucket=BUCKET, Key=key, Body=file_data)
+                      total_bytes += len(file_data)
+                  except Exception as e:
+                      errors += 1
+                      logger.debug(f"Upload failed for {rssd_id}: {e}")
 
               logger.info(
                   f"  {quarter_date}: {len(groups)-errors}/{len(groups)} banks, "

@@ -690,11 +690,9 @@ def upload_quarter(s3, df: pd.DataFrame, quarter_date: str) -> int:
 
 def _upload_per_bank_parallel(s3, df: pd.DataFrame, quarter_date: str) -> int:
     """
-    Write one Parquet file per bank in parallel using a thread pool.
-    These tiny files (~10KB each) enable O(1) bank lookups instead of full scans.
-
-    Uses direct put_object (no retry wrapper) to avoid connection pool deadlocks.
-    4 workers is safe with a pool size of 50 connections.
+    Write one Parquet file per bank to R2.
+    Uses sequential uploads to avoid boto3 thread-safety deadlocks with Cloudflare R2.
+    ~5ms per file × 4,400 files = ~22 seconds per quarter.
     """
     if "rssd_id" not in df.columns:
         return 0
@@ -703,27 +701,26 @@ def _upload_per_bank_parallel(s3, df: pd.DataFrame, quarter_date: str) -> int:
     errors      = 0
     groups      = list(df.groupby("rssd_id"))
 
-    def _write_one(rssd_id: object, bank_df: pd.DataFrame) -> int:
-        key  = _BANK_KEY.format(rssd_id=str(rssd_id), quarter=quarter_date)
-        buf  = io.BytesIO()
+    # Pre-serialize all bank files to bytes first (CPU, no network)
+    serialized: dict[str, bytes] = {}
+    for rssd_id, bank_df in groups:
+        buf = io.BytesIO()
         pq.write_table(
             pa.Table.from_pandas(bank_df.reset_index(drop=True)),
             buf,
             compression="snappy",
         )
-        data = buf.getvalue()
-        # Direct put_object — small files never need multipart or retry wrapper
-        s3.put_object(Bucket=BUCKET, Key=key, Body=data)
-        return len(data)
+        serialized[str(rssd_id)] = buf.getvalue()
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {pool.submit(_write_one, rssd, bdf): rssd for rssd, bdf in groups}
-        for future in as_completed(futures):
-            try:
-                total_bytes += future.result()
-            except Exception as e:
-                errors += 1
-                logger.debug(f"Per-bank upload failed for {futures[future]}: {e}")
+    # Upload sequentially — avoids boto3/R2 connection pool deadlocks
+    for rssd_id, data in serialized.items():
+        try:
+            key = _BANK_KEY.format(rssd_id=rssd_id, quarter=quarter_date)
+            s3.put_object(Bucket=BUCKET, Key=key, Body=data)
+            total_bytes += len(data)
+        except Exception as e:
+            errors += 1
+            logger.debug(f"Per-bank upload failed for {rssd_id}: {e}")
 
     if errors:
         logger.warning(f"{errors} per-bank upload failures for {quarter_date} (non-fatal)")
