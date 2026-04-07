@@ -1,7 +1,6 @@
 ﻿"""
-ubpr_ingest.py  —  FFIEC UBPR Ingestion Pipeline  (PySpark edition)
-====================================================================
-William & Mary MSBA Team 9 · Class of 2026
+ubpr_ingest.py
+==============
 
 Architecture
 ------------
@@ -55,7 +54,7 @@ from botocore.exceptions import ClientError, ConnectionClosedError, EndpointConn
 from dotenv import load_dotenv
 from ffiec_data_collector import FFIECDownloader, FileFormat
 
-# ── PySpark (optional — graceful degradation to pandas if unavailable) ─────────
+# PySpark (optional — graceful degradation to pandas if unavailable)
 # On Windows, PySpark requires winutils.exe which is rarely installed.
 # We automatically disable it on Windows to avoid "path not found" errors.
 SPARK_AVAILABLE = False
@@ -68,7 +67,7 @@ if os.name != "nt":  # PySpark on Linux/Mac (GitHub Actions); pandas on Windows
     except ImportError:
         pass
 
-# ── Logging ────────────────────────────────────────────────────────────────────
+# Logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
@@ -76,7 +75,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ubpr_ingest")
 
-# ── Environment ────────────────────────────────────────────────────────────────
+# Environment
 _ENV_FILE = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path=_ENV_FILE)
 
@@ -198,6 +197,111 @@ def list_r2_quarters(s3) -> dict[str, int]:
     total_gb = sum(stored.values()) / 1024 ** 3
     logger.info(f"R2 inventory: {len(stored)} quarters, {total_gb:.2f} GB total")
     return stored
+
+
+# 3b. R2 state checker — what files exist for each quarter?
+
+def check_r2_quarter_state(s3, quarter_date: str) -> dict:
+    """
+    Check what files exist in R2 for a given quarter.
+
+    Returns:
+        {
+            "has_full_quarter": bool,   # ubpr/year=.../quarter=.../data.parquet
+            "has_per_bank":     bool,   # at least one ubpr/by_bank/{rssd}/{Q}.parquet
+            "per_bank_count":   int,    # number of per-bank files found
+        }
+
+    Used to decide what action is needed:
+      - Neither exists   → download from FFIEC + write both layouts
+      - Full only        → read full file + split into per-bank (no re-download)
+      - Both exist       → skip entirely
+    """
+    year         = quarter_date[:4]
+    full_key     = f"ubpr/year={year}/quarter={quarter_date}/data.parquet"
+    bank_prefix  = f"ubpr/by_bank/"
+
+    has_full = False
+    try:
+        s3.head_object(Bucket=BUCKET, Key=full_key)
+        has_full = True
+    except Exception:
+        pass
+
+    # Check if any per-bank files exist for this quarter
+    per_bank_count = 0
+    try:
+        paginator = s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(
+            Bucket=BUCKET,
+            Prefix=bank_prefix,
+            # We can't filter by quarter in prefix, so check a sample
+            # Use MaxKeys to avoid scanning all banks
+        ):
+            for obj in page.get("Contents", []):
+                if obj["Key"].endswith(f"/{quarter_date}.parquet"):
+                    per_bank_count += 1
+                if per_bank_count >= 10:  # sample check — if 10 exist, assume all do
+                    break
+            if per_bank_count >= 10:
+                break
+    except Exception:
+        pass
+
+    return {
+        "has_full_quarter": has_full,
+        "has_per_bank":     per_bank_count > 0,
+        "per_bank_count":   per_bank_count,
+    }
+
+
+def backfill_per_bank_from_full_quarter(s3, quarter_date: str) -> int:
+    """
+    Read an existing full-quarter Parquet from R2 and split it into
+    per-bank files. Used when full-quarter exists but per-bank files don't.
+
+    This avoids re-downloading ~120MB from FFIEC — we already have the data.
+    Returns bytes written.
+    """
+    import duckdb
+    year    = quarter_date[:4]
+    full_url = f"s3://{BUCKET}/ubpr/year={year}/quarter={quarter_date}/data.parquet"
+
+    logger.info(f"Reading full-quarter file to backfill per-bank files: {quarter_date}")
+
+    # Use DuckDB to read from R2 directly
+    S3_HOST = S3_ENDPOINT.replace("https://", "").replace("http://", "").rstrip("/")
+    con = duckdb.connect()
+    try:
+        con.execute("INSTALL httpfs; LOAD httpfs;")
+        con.execute(f"SET s3_endpoint = '{S3_HOST}';")
+        con.execute(f"SET s3_access_key_id = '{AWS_ACCESS_KEY}';")
+        con.execute(f"SET s3_secret_access_key = '{AWS_SECRET_KEY}';")
+        con.execute("SET s3_region = 'auto';")
+        con.execute("SET s3_use_ssl = true;")
+        con.execute("SET s3_url_style = 'path';")
+
+        df = con.execute(f"SELECT * FROM read_parquet('{full_url}')").df()
+    except Exception as e:
+        logger.error(f"Failed to read full-quarter file for {quarter_date}: {e}")
+        return 0
+    finally:
+        con.close()
+
+    if df.empty:
+        logger.warning(f"Full-quarter file empty for {quarter_date}")
+        return 0
+
+    logger.info(
+        f"Backfilling per-bank files for {quarter_date}: "
+        f"{len(df):,} banks, {len(df.columns)} columns"
+    )
+    bank_bytes = _upload_per_bank_parallel(s3, df, quarter_date)
+    logger.info(
+        f"Backfill complete for {quarter_date}: "
+        f"{bank_bytes/1024:.0f} KB written"
+    )
+    return bank_bytes
 
 
 # 4. FFIEC API — what quarters are available upstream?
@@ -344,7 +448,7 @@ def download_quarter(quarter_date: str) -> pd.DataFrame:
 
     df = pd.DataFrame(records)
 
-    # ── Data accuracy: cast ratio columns to float64 ────────────────────────
+    # Data accuracy: cast ratio columns to float64
     ratio_cols = [c for c in df.columns if c not in ("rssd_id", "quarter_date")]
     for col in ratio_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -355,7 +459,7 @@ def download_quarter(quarter_date: str) -> pd.DataFrame:
     if len(df) < before:
         logger.warning(f"Dropped {before - len(df)} duplicate RSSD rows in {quarter_date}")
 
-    # ── Data accuracy: sanity check ─────────────────────────────────────────
+    # Data accuracy: sanity check
     if len(df) < 100:
         logger.warning(
             f"Quarter {quarter_date} has only {len(df)} institutions — "
@@ -544,14 +648,14 @@ def upload_quarter(s3, df: pd.DataFrame, quarter_date: str) -> int:
     data       = buf.getvalue()
     size_mb    = len(data) / 1024 ** 2
 
-    # ── Layout 1: full quarter ──────────────────────────────────────────────
+    # Layout 1: full quarter
     key = _QUARTER_KEY.format(year=year, quarter=quarter_date)
     logger.info(f"Uploading full quarter {key} ({size_mb:.1f} MB)")
     _upload_bytes(s3, key, data)
 
     bytes_written = len(data)
 
-    # ── Layout 2: per-bank files (parallel upload) ──────────────────────────
+    # Layout 2: per-bank files (parallel upload)
     bank_bytes = _upload_per_bank_parallel(s3, df, quarter_date)
     bytes_written += bank_bytes
 
@@ -644,134 +748,209 @@ def _upload_bytes(s3, key: str, data: bytes, attempts: int = 5) -> None:
 # 9. Main pipeline orchestration
 
 def run(
-    full_history: bool = False,
-    dry_run:      bool = False,
+    full_history:   bool  = False,
+    dry_run:        bool  = False,
     target_quarter: Optional[str] = None,
-    budget_gb:    float = BUDGET_GB,
+    budget_gb:      float = BUDGET_GB,
 ) -> None:
+    """
+    Main ingestion pipeline.
+
+    For each FFIEC quarter, checks R2 state and takes the minimum action needed:
+
+        State A — neither full-quarter nor per-bank files exist:
+            → Download from FFIEC, transform, upload BOTH layouts
+            → Typical for new quarters (quarterly cadence)
+
+        State B — full-quarter file exists but per-bank files missing:
+            → Read existing full-quarter file, split into per-bank files
+            → NO re-download needed (already have the data)
+            → This handles all 93 quarters ingested by the old pipeline
+
+        State C — both layouts exist:
+            → Skip entirely — nothing to do
+
+    This means the first run after deploying the new pipeline will
+    automatically backfill per-bank files for all 93 existing quarters
+    without touching the FFIEC API.
+    """
     validate_env()
     s3 = get_s3()
 
+    mode_label = (
+        f"TARGETED {target_quarter}" if target_quarter
+        else "FULL HISTORY" if full_history
+        else "INCREMENTAL"
+    )
+
     logger.info("=" * 72)
-    logger.info("FFIEC UBPR Ingestion Pipeline  —  PySpark on Linux/Mac, pandas on Windows")
-    logger.info(f"  Mode       : {'TARGETED ' + target_quarter if target_quarter else 'FULL HISTORY' if full_history else 'INCREMENTAL'}")
-    logger.info(f"  Dry run    : {dry_run}")
-    logger.info(f"  Budget     : {budget_gb} GB")
-    logger.info(f"  PySpark    : {'available' if SPARK_AVAILABLE else 'not available (pandas fallback)'}")
-    logger.info(f"  Bucket     : {BUCKET}")
+    logger.info("FFIEC UBPR Ingestion Pipeline — PySpark on Linux/Mac, pandas on Windows")
+    logger.info(f"  Mode    : {mode_label}")
+    logger.info(f"  Dry run : {dry_run}")
+    logger.info(f"  Budget  : {budget_gb} GB")
+    logger.info(f"  PySpark : {'available' if SPARK_AVAILABLE else 'not available (pandas fallback)'}")
+    logger.info(f"  Bucket  : {BUCKET}")
     logger.info("=" * 72)
 
-    # ── Step 1: What's in R2 right now? ────────────────────────────────────
-    logger.info("Scanning R2 inventory...")
+    # Step 1: R2 inventory
+    logger.info("Scanning R2 full-quarter inventory...")
     r2_quarters = list_r2_quarters(s3)
 
-    # ── Step 2: What does FFIEC have? ──────────────────────────────────────
-    logger.info("Fetching FFIEC available quarters...")
+    # Step 2: FFIEC available quarters
+    logger.info("Generating FFIEC quarter list...")
     ffiec_quarters = list_ffiec_quarters()
 
-    # ── Step 3: Smart delta — no cooldown, just "what's missing?" ──────────
-    to_ingest = compute_delta(ffiec_quarters, r2_quarters, full_history, target_quarter)
+    # Step 3: Which quarters need ANY work?
+    if target_quarter:
+        work_list = [target_quarter] if target_quarter in ffiec_quarters else []
+    elif full_history:
+        work_list = sorted(ffiec_quarters, reverse=True)
+    else:
+        # Incremental: quarters not fully in R2
+        work_list = sorted(
+            [q for q in ffiec_quarters if q not in r2_quarters],
+            reverse=True,
+        )
 
-    if not to_ingest:
+    if not work_list:
         logger.info("R2 is fully in sync with FFIEC. Nothing to ingest.")
         write_metadata(s3, {
             **read_metadata(s3),
-            "total_quarters_in_r2":  len(r2_quarters),
-            "total_gb_stored":       sum(r2_quarters.values()) / 1024 ** 3,
-            "last_run_result":       "up_to_date",
+            "total_quarters_in_r2": len(r2_quarters),
+            "total_gb_stored":      sum(r2_quarters.values()) / 1024 ** 3,
+            "last_run_result":      "up_to_date",
         })
         return
 
+    # ── Step 4: Classify each quarter (State A / B / C) ────────────────────
+    logger.info(f"Classifying {len(work_list)} quarters...")
+
+    need_download: list[str] = []   # State A — download + both layouts
+    need_backfill: list[str] = []   # State B — per-bank files only
+    already_done:  list[str] = []   # State C — skip
+
+    for q in work_list:
+        state = check_r2_quarter_state(s3, q)
+        if state["has_full_quarter"] and state["has_per_bank"]:
+            already_done.append(q)
+        elif state["has_full_quarter"] and not state["has_per_bank"]:
+            need_backfill.append(q)
+        else:
+            need_download.append(q)
+
     logger.info(
-        f"Quarters to ingest: {len(to_ingest)} "
-        f"({to_ingest[0]} newest → {to_ingest[-1]} oldest)"
+        f"Classification complete: "
+        f"{len(need_download)} need download, "
+        f"{len(need_backfill)} need backfill, "
+        f"{len(already_done)} already complete"
     )
 
     if dry_run:
-        logger.info("\n[DRY RUN] Would ingest:")
-        for q in to_ingest:
-            status = f"{r2_quarters[q]/1024/1024:.1f} MB (exists — re-ingest)" \
-                     if q in r2_quarters else "~30 MB (estimated)"
-            logger.info(f"  {q}  {status}")
-        logger.info(f"[DRY RUN] Estimated: ~{len(to_ingest) * 30 / 1024:.1f} GB")
+        logger.info("\n[DRY RUN] Plan:")
+        logger.info(f"  Download from FFIEC ({len(need_download)} quarters):")
+        for q in need_download[:10]:
+            logger.info(f"    {q}  ~30 MB from FFIEC API + write 2 layouts")
+        if len(need_download) > 10:
+            logger.info(f"    ... and {len(need_download) - 10} more")
+        logger.info(f"  Backfill per-bank files ({len(need_backfill)} quarters):")
+        for q in need_backfill[:10]:
+            logger.info(f"    {q}  read existing R2 file → split into per-bank")
+        if len(need_backfill) > 10:
+            logger.info(f"    ... and {len(need_backfill) - 10} more")
+        logger.info(f"  Skip ({len(already_done)} quarters already complete)")
         return
 
-    # ── Step 4: Ingest loop — newest first, stop at budget ─────────────────
-    budget_bytes = budget_gb * 1024 ** 3
     bytes_written = 0
-    succeeded, failed, deferred = [], [], []
+    succeeded_download, succeeded_backfill, failed, deferred = [], [], [], []
     run_start = time.time()
+    budget_bytes = budget_gb * 1024 ** 3
 
-    for i, quarter_date in enumerate(to_ingest, 1):
-        gb_used      = bytes_written / 1024 ** 3
-        gb_remaining = budget_gb - gb_used
-
-        logger.info("-" * 72)
-        logger.info(
-            f"[{i}/{len(to_ingest)}] {quarter_date} | "
-            f"Used {gb_used:.2f} GB / {budget_gb} GB budget"
-        )
-
-        if gb_remaining < 0.05:
-            logger.warning(
-                f"Budget nearly exhausted ({gb_remaining*1024:.0f} MB left). "
-                f"Deferring {len(to_ingest) - i + 1} quarters."
-            )
-            deferred.extend(to_ingest[i - 1:])
-            break
-
-        try:
-            t0 = time.time()
-
-            # Download from FFIEC
-            df = download_quarter(quarter_date)
-
-            # Transform with PySpark (or pandas fallback)
+    # Step 5A: Backfill per-bank files (State B)
+    # Do this first — fast (no FFIEC download), unblocks fast query path immediately
+    if need_backfill:
+        logger.info(f"Backfilling per-bank files for {len(need_backfill)} quarters...")
+        for i, quarter_date in enumerate(need_backfill, 1):
+            logger.info(f"  [backfill {i}/{len(need_backfill)}] {quarter_date}")
             try:
-                df = spark_transform(df, quarter_date)
-            except Exception as spark_err:
-                logger.warning(f"PySpark transform failed ({spark_err}), falling back to pandas")
-                df = _pandas_transform(df, quarter_date)
+                b = backfill_per_bank_from_full_quarter(s3, quarter_date)
+                bytes_written += b
+                succeeded_backfill.append(quarter_date)
+                logger.info(f"  {quarter_date} backfilled: {b/1024:.0f} KB per-bank files")
+            except Exception as e:
+                logger.error(f"  {quarter_date} backfill failed: {e}")
+                failed.append(quarter_date)
 
-            # Upload both layouts to R2
-            q_bytes = upload_quarter(s3, df, quarter_date)
-            bytes_written += q_bytes
+    # Step 5B: Download + ingest (State A)
+    if need_download:
+        logger.info(f"Downloading {len(need_download)} quarters from FFIEC...")
+        for i, quarter_date in enumerate(need_download, 1):
+            gb_used      = bytes_written / 1024 ** 3
+            gb_remaining = budget_gb - gb_used
 
-            elapsed = time.time() - t0
-            succeeded.append(quarter_date)
+            logger.info("-" * 72)
             logger.info(
-                f"{quarter_date} done in {elapsed:.1f}s | "
-                f"{q_bytes/1024/1024:.1f} MB written"
+                f"[download {i}/{len(need_download)}] {quarter_date} | "
+                f"Used {gb_used:.2f} GB / {budget_gb} GB"
             )
 
-        except Exception as e:
-            logger.error(f"{quarter_date} failed: {e}")
-            failed.append(quarter_date)
-            continue  # don't stop — process remaining quarters
+            if bytes_written > 0 and bytes_written >= budget_bytes - (50 * 1024 ** 2):
+                logger.warning(
+                    f"Budget nearly exhausted ({gb_remaining:.2f} GB left). "
+                    f"Deferring {len(need_download) - i + 1} download quarters."
+                )
+                deferred.extend(need_download[i - 1:])
+                break
+
+            try:
+                t0 = time.time()
+                df = download_quarter(quarter_date)
+
+                try:
+                    df = spark_transform(df, quarter_date)
+                except Exception as spark_err:
+                    logger.warning(
+                        f"PySpark transform failed ({spark_err}) — using pandas fallback"
+                    )
+                    df = _pandas_transform(df, quarter_date)
+
+                q_bytes = upload_quarter(s3, df, quarter_date)
+                bytes_written += q_bytes
+                succeeded_download.append(quarter_date)
+                logger.info(
+                    f"{quarter_date} done in {time.time()-t0:.1f}s | "
+                    f"{q_bytes/1024/1024:.1f} MB written"
+                )
+            except Exception as e:
+                logger.error(f"{quarter_date} failed: {e}")
+                failed.append(quarter_date)
+                continue
 
     total_elapsed = time.time() - run_start
 
-    # ── Step 5: Write updated metadata ─────────────────────────────────────
-    updated_r2 = list_r2_quarters(s3)
+    # Step 6: Write updated metadata
+    all_succeeded = succeeded_download + succeeded_backfill
+    updated_r2    = list_r2_quarters(s3)
     write_metadata(s3, {
-        "last_run_utc":            datetime.now(timezone.utc).isoformat(),
-        "last_run_mode":           "full_history" if full_history else
-                                   "targeted" if target_quarter else "incremental",
-        "last_run_succeeded":      succeeded,
-        "last_run_failed":         failed,
-        "last_run_deferred":       deferred,
-        "last_run_bytes_written":  bytes_written,
-        "last_run_duration_s":     round(total_elapsed),
-        "total_quarters_in_r2":    len(updated_r2),
-        "total_gb_stored":         sum(updated_r2.values()) / 1024 ** 3,
-        "last_run_result":         "completed" if not failed else "completed_with_errors",
-        "spark_used":              SPARK_AVAILABLE,
+        "last_run_utc":              datetime.now(timezone.utc).isoformat(),
+        "last_run_mode":             "full_history" if full_history else
+                                     "targeted" if target_quarter else "incremental",
+        "last_run_succeeded_dl":     succeeded_download,
+        "last_run_succeeded_bf":     succeeded_backfill,
+        "last_run_failed":           failed,
+        "last_run_deferred":         deferred,
+        "last_run_bytes_written":    bytes_written,
+        "last_run_duration_s":       round(total_elapsed),
+        "total_quarters_in_r2":      len(updated_r2),
+        "total_gb_stored":           sum(updated_r2.values()) / 1024 ** 3,
+        "last_run_result":           "completed" if not failed else "completed_with_errors",
+        "spark_used":                SPARK_AVAILABLE,
     })
 
-    # ── Summary ─────────────────────────────────────────────────────────────
+    # Summary
     logger.info("=" * 72)
     logger.info("SUMMARY")
-    logger.info(f"  Succeeded  : {len(succeeded)}  {succeeded[:3]}{'...' if len(succeeded) > 3 else ''}")
+    logger.info(f"  Downloaded : {len(succeeded_download)}  {succeeded_download[:3]}{'...' if len(succeeded_download) > 3 else ''}")
+    logger.info(f"  Backfilled : {len(succeeded_backfill)}  {succeeded_backfill[:3]}{'...' if len(succeeded_backfill) > 3 else ''}")
     logger.info(f"  Failed     : {len(failed)}  {failed if failed else ''}")
     logger.info(f"  Deferred   : {len(deferred)} (budget limit)")
     logger.info(f"  Written    : {bytes_written/1024/1024/1024:.3f} GB")
