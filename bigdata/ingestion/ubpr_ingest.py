@@ -1,6 +1,6 @@
 ﻿"""
 ubpr_ingest.py
-==============
+================
 
 Architecture
 ------------
@@ -54,7 +54,7 @@ from botocore.exceptions import ClientError, ConnectionClosedError, EndpointConn
 from dotenv import load_dotenv
 from ffiec_data_collector import FFIECDownloader, FileFormat
 
-# PySpark (optional — graceful degradation to pandas if unavailable)
+# ── PySpark (optional — graceful degradation to pandas if unavailable) ─────────
 # On Windows, PySpark requires winutils.exe which is rarely installed.
 # We automatically disable it on Windows to avoid "path not found" errors.
 SPARK_AVAILABLE = False
@@ -67,7 +67,7 @@ if os.name != "nt":  # PySpark on Linux/Mac (GitHub Actions); pandas on Windows
     except ImportError:
         pass
 
-# Logging
+# ── Logging ────────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
@@ -75,7 +75,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ubpr_ingest")
 
-# Environment
+# ── Environment ────────────────────────────────────────────────────────────────
 _ENV_FILE = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path=_ENV_FILE)
 
@@ -205,22 +205,25 @@ def check_r2_quarter_state(s3, quarter_date: str) -> dict:
     """
     Check what files exist in R2 for a given quarter.
 
-    Returns:
-        {
-            "has_full_quarter": bool,   # ubpr/year=.../quarter=.../data.parquet
-            "has_per_bank":     bool,   # at least one ubpr/by_bank/{rssd}/{Q}.parquet
-            "per_bank_count":   int,    # number of per-bank files found
-        }
+    Strategy:
+      1. HEAD the full-quarter file — instant single request
+      2. If full-quarter exists, read 3 RSSDIDs directly from it
+         then HEAD those specific per-bank keys — 3 fast requests
+      3. First per-bank hit → has_per_bank = True, stop checking
+         All 3 miss → has_per_bank = False, needs backfill
 
-    Used to decide what action is needed:
-      - Neither exists   → download from FFIEC + write both layouts
-      - Full only        → read full file + split into per-bank (no re-download)
-      - Both exist       → skip entirely
+    This approach:
+      - Never lists the entire by_bank/ prefix (avoids slow scans)
+      - Uses actual RSSDIDs from the quarter (works for all quarters)
+      - Completes in <1 second per quarter
     """
-    year         = quarter_date[:4]
-    full_key     = f"ubpr/year={year}/quarter={quarter_date}/data.parquet"
-    bank_prefix  = f"ubpr/by_bank/"
+    import duckdb as _duckdb
 
+    year     = quarter_date[:4]
+    full_key = f"ubpr/year={year}/quarter={quarter_date}/data.parquet"
+    full_url = f"s3://{BUCKET}/{full_key}"
+
+    # Step 1 — Check full-quarter file
     has_full = False
     try:
         s3.head_object(Bucket=BUCKET, Key=full_key)
@@ -228,30 +231,49 @@ def check_r2_quarter_state(s3, quarter_date: str) -> dict:
     except Exception:
         pass
 
-    # Check if any per-bank files exist for this quarter
-    per_bank_count = 0
+    if not has_full:
+        return {"has_full_quarter": False, "has_per_bank": False, "per_bank_count": 0}
+
+    # Step 2 — Get 3 RSSDIDs from the full-quarter file
+    S3_HOST = S3_ENDPOINT.replace("https://", "").replace("http://", "").rstrip("/")
+    sample_rssd_ids = []
     try:
-        paginator = s3.get_paginator("list_objects_v2")
-        for page in paginator.paginate(
-            Bucket=BUCKET,
-            Prefix=bank_prefix,
-            # We can't filter by quarter in prefix, so check a sample
-            # Use MaxKeys to avoid scanning all banks
-        ):
-            for obj in page.get("Contents", []):
-                if obj["Key"].endswith(f"/{quarter_date}.parquet"):
-                    per_bank_count += 1
-                if per_bank_count >= 10:  # sample check — if 10 exist, assume all do
-                    break
-            if per_bank_count >= 10:
-                break
-    except Exception:
-        pass
+        con = _duckdb.connect()
+        try:
+            con.execute("INSTALL httpfs; LOAD httpfs;")
+            con.execute(f"SET s3_endpoint = '{S3_HOST}';")
+            con.execute(f"SET s3_access_key_id = '{AWS_ACCESS_KEY}';")
+            con.execute(f"SET s3_secret_access_key = '{AWS_SECRET_KEY}';")
+            con.execute("SET s3_region = 'auto';")
+            con.execute("SET s3_use_ssl = true;")
+            con.execute("SET s3_url_style = 'path';")
+            rows = con.execute(
+                f"SELECT rssd_id FROM read_parquet('{full_url}') LIMIT 3"
+            ).fetchall()
+            sample_rssd_ids = [str(row[0]) for row in rows]
+        finally:
+            con.close()
+    except Exception as e:
+        logger.warning(f"Could not sample RSSDIDs from {quarter_date}: {e}")
+        return {"has_full_quarter": True, "has_per_bank": False, "per_bank_count": 0}
+
+    # Step 3 — HEAD each sampled RSSDID's per-bank file
+    has_per_bank = False
+    for rssd_id in sample_rssd_ids:
+        try:
+            s3.head_object(
+                Bucket=BUCKET,
+                Key=f"ubpr/by_bank/{rssd_id}/{quarter_date}.parquet"
+            )
+            has_per_bank = True
+            break  # one hit is enough — quarter has per-bank files
+        except Exception:
+            continue  # this bank missing — try next
 
     return {
-        "has_full_quarter": has_full,
-        "has_per_bank":     per_bank_count > 0,
-        "per_bank_count":   per_bank_count,
+        "has_full_quarter": True,
+        "has_per_bank":     has_per_bank,
+        "per_bank_count":   1 if has_per_bank else 0,
     }
 
 
@@ -448,7 +470,7 @@ def download_quarter(quarter_date: str) -> pd.DataFrame:
 
     df = pd.DataFrame(records)
 
-    # Data accuracy: cast ratio columns to float64
+    # ── Data accuracy: cast ratio columns to float64 ────────────────────────
     ratio_cols = [c for c in df.columns if c not in ("rssd_id", "quarter_date")]
     for col in ratio_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -459,7 +481,7 @@ def download_quarter(quarter_date: str) -> pd.DataFrame:
     if len(df) < before:
         logger.warning(f"Dropped {before - len(df)} duplicate RSSD rows in {quarter_date}")
 
-    # Data accuracy: sanity check
+    # ── Data accuracy: sanity check ─────────────────────────────────────────
     if len(df) < 100:
         logger.warning(
             f"Quarter {quarter_date} has only {len(df)} institutions — "
@@ -648,14 +670,14 @@ def upload_quarter(s3, df: pd.DataFrame, quarter_date: str) -> int:
     data       = buf.getvalue()
     size_mb    = len(data) / 1024 ** 2
 
-    # Layout 1: full quarter
+    # ── Layout 1: full quarter ──────────────────────────────────────────────
     key = _QUARTER_KEY.format(year=year, quarter=quarter_date)
     logger.info(f"Uploading full quarter {key} ({size_mb:.1f} MB)")
     _upload_bytes(s3, key, data)
 
     bytes_written = len(data)
 
-    # Layout 2: per-bank files (parallel upload)
+    # ── Layout 2: per-bank files (parallel upload) ──────────────────────────
     bank_bytes = _upload_per_bank_parallel(s3, df, quarter_date)
     bytes_written += bank_bytes
 
@@ -792,15 +814,15 @@ def run(
     logger.info(f"  Bucket  : {BUCKET}")
     logger.info("=" * 72)
 
-    # Step 1: R2 inventory
+    # ── Step 1: R2 inventory ────────────────────────────────────────────────
     logger.info("Scanning R2 full-quarter inventory...")
     r2_quarters = list_r2_quarters(s3)
 
-    # Step 2: FFIEC available quarters
+    # ── Step 2: FFIEC available quarters ───────────────────────────────────
     logger.info("Generating FFIEC quarter list...")
     ffiec_quarters = list_ffiec_quarters()
 
-    # Step 3: Which quarters need ANY work?
+    # ── Step 3: Which quarters need ANY work? ───────────────────────────────
     if target_quarter:
         work_list = [target_quarter] if target_quarter in ffiec_quarters else []
     elif full_history:
@@ -865,7 +887,7 @@ def run(
     run_start = time.time()
     budget_bytes = budget_gb * 1024 ** 3
 
-    # Step 5A: Backfill per-bank files (State B)
+    # ── Step 5A: Backfill per-bank files (State B) ──────────────────────────
     # Do this first — fast (no FFIEC download), unblocks fast query path immediately
     if need_backfill:
         logger.info(f"Backfilling per-bank files for {len(need_backfill)} quarters...")
@@ -880,7 +902,7 @@ def run(
                 logger.error(f"  {quarter_date} backfill failed: {e}")
                 failed.append(quarter_date)
 
-    # Step 5B: Download + ingest (State A)
+    # ── Step 5B: Download + ingest (State A) ───────────────────────────────
     if need_download:
         logger.info(f"Downloading {len(need_download)} quarters from FFIEC...")
         for i, quarter_date in enumerate(need_download, 1):
