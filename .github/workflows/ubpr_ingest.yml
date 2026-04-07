@@ -2,14 +2,19 @@ name: UBPR Data Ingestion
 
 on:
   # Run automatically when a new quarter likely becomes available
-  # FFIEC releases quarterly data ~2 weeks after quarter end
-  # Q1 (Mar 31) → mid-April | Q2 (Jun 30) → mid-July
-  # Q3 (Sep 30) → mid-October | Q4 (Dec 31) → mid-January
   schedule:
-    - cron: "0 8 15 1,4,7,10 *"   # 8 AM UTC on the 15th of Jan/Apr/Jul/Oct
+    - cron: "0 8 15 1,4,7,10 *"
 
-  # Also allow manual trigger from GitHub UI
+  # Allow manual trigger from GitHub UI on any branch
   workflow_dispatch:
+
+  # Also run when pushed to this branch (for testing)
+  push:
+    branches:
+      - sprak-logic-modification
+    paths:
+      - "bigdata/ingestion/ubpr_ingest.py"
+      - ".github/workflows/ubpr_ingest.yml"
     inputs:
       mode:
         description: "Ingestion mode"
@@ -121,7 +126,7 @@ jobs:
           from bigdata.queryengine.query_engine import list_available_quarters, ping_r2
           result = ping_r2()
           quarters = list_available_quarters()
-          print(f"R2 now has {len(quarters)} quarters")
+          print(f"✅ R2 now has {len(quarters)} quarters")
           print(f"   Oldest: {quarters[0] if quarters else 'none'}")
           print(f"   Latest: {quarters[-1] if quarters else 'none'}")
           EOF
@@ -134,5 +139,5 @@ jobs:
             "${{ secrets.RENDER_BACKEND_URL }}/ubpr/cache/clear" \
             -X POST \
             -H "X-Internal-Token: ${{ secrets.INTERNAL_API_TOKEN }}" \
-          | grep -q "200" && echo "Cache cleared" || echo "⚠️ Cache clear failed (non-fatal)"
+          | grep -q "200" && echo "✅ Cache cleared" || echo "⚠️ Cache clear failed (non-fatal)"
         continue-on-error: true
