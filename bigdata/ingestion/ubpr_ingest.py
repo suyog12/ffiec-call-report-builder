@@ -58,15 +58,10 @@ from ffiec_data_collector import FFIECDownloader, FileFormat
 # ── PySpark (optional — graceful degradation to pandas if unavailable) ─────────
 # On Windows, PySpark requires winutils.exe which is rarely installed.
 # We automatically disable it on Windows to avoid "path not found" errors.
+# PySpark disabled — pandas is faster for wide DataFrames (2,800+ columns)
+# PySpark excels at row-level parallelism (millions of rows), not wide schemas
+# Our data: ~4,400 rows × 2,810 columns — pandas handles this in seconds
 SPARK_AVAILABLE = False
-if os.name != "nt":  # PySpark on Linux/Mac (GitHub Actions); pandas on Windows
-    try:
-        from pyspark.sql import SparkSession
-        from pyspark.sql import functions as F
-        from pyspark.sql.types import StringType, DoubleType
-        SPARK_AVAILABLE = True
-    except ImportError:
-        pass
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 logging.basicConfig(

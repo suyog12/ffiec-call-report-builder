@@ -51,17 +51,11 @@ jobs:
           cache: "pip"
           cache-dependency-path: bigdata/requirements.txt
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: "17"
-          distribution: "temurin"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r bigdata/requirements.txt
-          pip install pyspark==3.5.0 duckdb boto3 pyarrow pandas python-dotenv ffiec-data-collector
+          pip install duckdb boto3 pyarrow pandas python-dotenv ffiec-data-collector
 
       - name: Configure environment
         run: |
