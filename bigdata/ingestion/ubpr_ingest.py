@@ -59,7 +59,7 @@ from ffiec_data_collector import FFIECDownloader, FileFormat
 # On Windows, PySpark requires winutils.exe which is rarely installed.
 # We automatically disable it on Windows to avoid "path not found" errors.
 SPARK_AVAILABLE = False
-if os.name != "nt":  # not Windows
+if os.name != "nt":  # PySpark on Linux/Mac (GitHub Actions); pandas on Windows
     try:
         from pyspark.sql import SparkSession
         from pyspark.sql import functions as F
@@ -99,9 +99,7 @@ _BANK_KEY      = "ubpr/by_bank/{rssd_id}/{quarter}.parquet"
 _REQUIRED_ENV  = ["R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"]
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # 1. Environment & client helpers
-# ══════════════════════════════════════════════════════════════════════════════
 
 def validate_env() -> None:
     missing = [k for k in _REQUIRED_ENV if not os.getenv(k)]
@@ -113,12 +111,18 @@ def validate_env() -> None:
 
 
 def get_s3():
+    from botocore.config import Config
+    config = Config(
+        max_pool_connections=50,   # increase from default 10
+        retries={"max_attempts": 5, "mode": "adaptive"},
+    )
     return boto3.client(
         "s3",
         endpoint_url=S3_ENDPOINT,
         aws_access_key_id=AWS_ACCESS_KEY,
         aws_secret_access_key=AWS_SECRET_KEY,
         region_name="auto",
+        config=config,
     )
 
 
@@ -138,9 +142,7 @@ def _r2_retry(fn, attempts: int = 5):
     raise RuntimeError(f"R2 failed after {attempts} attempts: {last_err}") from last_err
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # 2. Metadata — tracks what has been ingested
-# ══════════════════════════════════════════════════════════════════════════════
 
 def read_metadata(s3) -> dict:
     try:
@@ -169,9 +171,7 @@ def write_metadata(s3, meta: dict) -> None:
         logger.warning(f"Could not write metadata (non-fatal): {e}")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # 3. R2 inventory — what quarters do we already have?
-# ══════════════════════════════════════════════════════════════════════════════
 
 def list_r2_quarters(s3) -> dict[str, int]:
     """
@@ -200,9 +200,7 @@ def list_r2_quarters(s3) -> dict[str, int]:
     return stored
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # 4. FFIEC API — what quarters are available upstream?
-# ══════════════════════════════════════════════════════════════════════════════
 
 def list_ffiec_quarters() -> list[str]:
     """
@@ -235,9 +233,7 @@ def list_ffiec_quarters() -> list[str]:
     return quarters
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # 5. Delta detection — smart "what needs ingesting?"
-# ══════════════════════════════════════════════════════════════════════════════
 
 def compute_delta(
     ffiec_quarters: list[str],
@@ -286,9 +282,7 @@ def compute_delta(
     return missing
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # 6. FFIEC download — fetch one quarter's ZIP
-# ══════════════════════════════════════════════════════════════════════════════
 
 def download_quarter(quarter_date: str) -> pd.DataFrame:
     """
@@ -421,9 +415,7 @@ def _parse_ffiec_zip(raw_zip: bytes, quarter_date: str) -> list[dict]:
     return records
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # 7. PySpark transform — parallel processing + data quality
-# ══════════════════════════════════════════════════════════════════════════════
 
 def spark_transform(df: pd.DataFrame, quarter_date: str) -> pd.DataFrame:
     """
@@ -528,9 +520,7 @@ def _get_spark():
     return builder.getOrCreate()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # 8. R2 upload — two layouts for different query patterns
-# ══════════════════════════════════════════════════════════════════════════════
 
 def upload_quarter(s3, df: pd.DataFrame, quarter_date: str) -> int:
     """
@@ -598,7 +588,7 @@ def _upload_per_bank_parallel(s3, df: pd.DataFrame, quarter_date: str) -> int:
         _upload_bytes(s3, key, data, attempts=2)  # fewer retries for small files
         return len(data)
 
-    with ThreadPoolExecutor(max_workers=16) as pool:
+    with ThreadPoolExecutor(max_workers=4) as pool:
         futures = {pool.submit(_write_one, rssd, bdf): rssd for rssd, bdf in groups}
         for future in as_completed(futures):
             try:
@@ -651,9 +641,7 @@ def _upload_bytes(s3, key: str, data: bytes, attempts: int = 5) -> None:
         raise
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # 9. Main pipeline orchestration
-# ══════════════════════════════════════════════════════════════════════════════
 
 def run(
     full_history: bool = False,
@@ -665,7 +653,7 @@ def run(
     s3 = get_s3()
 
     logger.info("=" * 72)
-    logger.info("FFIEC UBPR Ingestion Pipeline  —  PySpark Edition")
+    logger.info("FFIEC UBPR Ingestion Pipeline  —  PySpark on Linux/Mac, pandas on Windows")
     logger.info(f"  Mode       : {'TARGETED ' + target_quarter if target_quarter else 'FULL HISTORY' if full_history else 'INCREMENTAL'}")
     logger.info(f"  Dry run    : {dry_run}")
     logger.info(f"  Budget     : {budget_gb} GB")
@@ -794,9 +782,7 @@ def run(
     logger.info("=" * 72)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # 10. CLI entry point
-# ══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
