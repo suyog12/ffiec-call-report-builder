@@ -89,7 +89,7 @@ BUDGET_BYTES   = BUDGET_GB * 1024 ** 3
 # R2 key constants
 _META_KEY      = "ubpr/ingestion_metadata.json"
 _QUARTER_KEY   = "ubpr/year={year}/quarter={quarter}/data.parquet"
-_BANK_KEY      = "ubpr/by_bank/{rssd_id}/{quarter}.parquet"
+_BANK_KEY      = "ubpr/by_bank/{quarter}/{rssd_id}.parquet"
 
 _REQUIRED_ENV  = ["R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"]
 
@@ -108,8 +108,10 @@ def validate_env() -> None:
 def get_s3():
     from botocore.config import Config
     config = Config(
-        max_pool_connections=50,   # increase from default 10
+        max_pool_connections=10,
         retries={"max_attempts": 5, "mode": "adaptive"},
+        connect_timeout=10,      # 10s to establish connection
+        read_timeout=120,        # 2 min max per read — prevents hanging forever
     )
     return boto3.client(
         "s3",
@@ -259,7 +261,7 @@ def check_r2_quarter_state(s3, quarter_date: str) -> dict:
         try:
             s3.head_object(
                 Bucket=BUCKET,
-                Key=f"ubpr/by_bank/{rssd_id}/{quarter_date}.parquet"
+                Key=f"ubpr/by_bank/{quarter_date}/{rssd_id}.parquet"
             )
             has_per_bank = True
             break  # one hit is enough — quarter has per-bank files
@@ -737,14 +739,28 @@ def _upload_per_bank_parallel(s3, df: pd.DataFrame, quarter_date: str) -> int:
 
 def _upload_bytes(s3, key: str, data: bytes, attempts: int = 5) -> None:
     """
-    Upload bytes to R2.
-    Uses single put_object for all sizes — avoids multipart deadlocks.
-    boto3's put_object handles large files correctly via streaming.
+    Upload bytes to R2 using boto3 transfer manager.
+    Uses upload_fileobj which handles multipart automatically without deadlocks.
     """
+    import io as _io
+    from boto3.s3.transfer import TransferConfig
+
+    config = TransferConfig(
+        multipart_threshold   = 8 * 1024 * 1024,   # 8 MB threshold
+        multipart_chunksize   = 8 * 1024 * 1024,   # 8 MB chunks
+        max_concurrency       = 1,                  # sequential — no threading deadlocks
+        use_threads           = False,              # critical: disable threading
+    )
+
     last_err = None
     for attempt in range(1, attempts + 1):
         try:
-            s3.put_object(Bucket=BUCKET, Key=key, Body=data)
+            s3.upload_fileobj(
+                _io.BytesIO(data),
+                BUCKET,
+                key,
+                Config=config,
+            )
             return
         except Exception as e:
             last_err = e
@@ -822,7 +838,7 @@ def run(
         )
 
     if not work_list:
-        logger.info("R2 is fully in sync with FFIEC. Nothing to ingest.")
+        logger.info("✅ R2 is fully in sync with FFIEC. Nothing to ingest.")
         write_metadata(s3, {
             **read_metadata(s3),
             "total_quarters_in_r2": len(r2_quarters),
@@ -884,9 +900,9 @@ def run(
                 b = backfill_per_bank_from_full_quarter(s3, quarter_date)
                 bytes_written += b
                 succeeded_backfill.append(quarter_date)
-                logger.info(f"  {quarter_date} backfilled: {b/1024:.0f} KB per-bank files")
+                logger.info(f"  ✅ {quarter_date} backfilled: {b/1024:.0f} KB per-bank files")
             except Exception as e:
-                logger.error(f"  {quarter_date} backfill failed: {e}")
+                logger.error(f"  ❌ {quarter_date} backfill failed: {e}")
                 failed.append(quarter_date)
 
     # ── Step 5B: Download + ingest (State A) ───────────────────────────────
@@ -926,11 +942,11 @@ def run(
                 bytes_written += q_bytes
                 succeeded_download.append(quarter_date)
                 logger.info(
-                    f"{quarter_date} done in {time.time()-t0:.1f}s | "
+                    f"✅ {quarter_date} done in {time.time()-t0:.1f}s | "
                     f"{q_bytes/1024/1024:.1f} MB written"
                 )
             except Exception as e:
-                logger.error(f"{quarter_date} failed: {e}")
+                logger.error(f"❌ {quarter_date} failed: {e}")
                 failed.append(quarter_date)
                 continue
 
