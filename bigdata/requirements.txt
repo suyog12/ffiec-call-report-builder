@@ -1,5 +1,5 @@
 boto3
-pyspark
+pyspark==3.5.1
 duckdb
 pandas
 pyarrow
