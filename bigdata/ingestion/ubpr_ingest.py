@@ -271,9 +271,13 @@ def list_ffiec_available_quarters(start_year: int = 2001) -> list[str]:
     current_q    = (today.month - 1) // 3 + 1
     current_year = today.year
 
-    current_q -= 1
-    if current_q == 0:
-        current_q    = 4
+    # FFIEC publishes ~45-60 days after quarter end; stepping back 1 quarter
+    # can target a quarter that is generated but not yet published (e.g. Q1 2026
+    # on April 10 2026). Stepping back 2 quarters guarantees we only target
+    # quarters that are confirmed available.
+    current_q -= 2
+    if current_q <= 0:
+        current_q    += 4
         current_year -= 1
 
     quarters: list[str] = []
