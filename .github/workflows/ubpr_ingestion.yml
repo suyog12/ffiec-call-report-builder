@@ -1,0 +1,261 @@
+name: UBPR Daily Ingestion Check (PySpark)
+
+# ---------------------------------------------------------------------------
+# Triggers
+# ---------------------------------------------------------------------------
+# Runs daily at 12:00 UTC (noon) to check for newly published FFIEC quarters.
+# FFIEC publishes quarterly data 45-60 days after quarter end with no fixed
+# release date, so a daily check ensures new data is picked up within 24 hours
+# of it becoming available.
+#
+# The pipeline's data-based delta check exits in under 5 seconds on the ~360
+# days per year when FFIEC has not published a new quarter — no PySpark startup,
+# no downloads, minimal runner cost.
+#
+# Manual dispatch allows ad-hoc runs with configurable mode and budget.
+# ---------------------------------------------------------------------------
+
+on:
+  schedule:
+    - cron: "0 12 * * *"   # daily at 12:00 UTC
+
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Ingestion mode"
+        required: true
+        default: "incremental"
+        type: choice
+        options:
+          - incremental
+          - full
+          - dry-run
+      budget_gb:
+        description: "Write budget in GB (default: 9)"
+        required: false
+        default: "9"
+        type: string
+      force:
+        description: "Skip the delta check and force ingestion regardless of R2 state"
+        required: false
+        default: false
+        type: boolean
+
+# ---------------------------------------------------------------------------
+# Concurrency guard
+# ---------------------------------------------------------------------------
+# Prevent two ingestion runs from writing to R2 simultaneously.
+# If a run is already in progress, cancel it before starting the new one.
+# ---------------------------------------------------------------------------
+
+concurrency:
+  group: ubpr-ingestion
+  cancel-in-progress: true
+
+jobs:
+  ingest:
+    name: Ingest UBPR Data
+    runs-on: ubuntu-latest
+    timeout-minutes: 180   # 3-hour hard cap — full backfill finishes well within this
+
+    steps:
+
+      # 1. Checkout
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Java — required by PySpark
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # 3. Python
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 4. Cache pip dependencies
+      # Keyed on requirements.txt so the cache invalidates when deps change.
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('bigdata/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # 5. Install Python dependencies
+      # The bigdata package is installed as an editable install so the ingestion
+      # script can import query_engine.py and other internal modules directly.
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r bigdata/requirements.txt
+          pip install -e ./bigdata
+
+      # 6. Install Hadoop S3A JARs
+      # PySpark requires hadoop-aws and aws-java-sdk-bundle to write to any
+      # S3-compatible storage via the s3a:// scheme. These JARs are not bundled
+      # with PySpark by default and must be added to the Spark jars directory.
+      # Without them the pipeline raises ClassNotFoundException at runtime.
+      # The JAR versions are pinned to match the Hadoop version bundled with
+      # the installed PySpark to avoid compatibility errors.
+      - name: Install Hadoop S3A JARs for PySpark
+        run: |
+          SPARK_HOME=$(python -c "import pyspark; import os; print(os.path.dirname(pyspark.__file__))")
+          JAR_DIR="$SPARK_HOME/jars"
+
+          # Detect the Hadoop version bundled with this PySpark installation
+          HADOOP_VERSION=$(ls "$JAR_DIR"/hadoop-common-*.jar 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1)
+
+          if [ -z "$HADOOP_VERSION" ]; then
+            echo "Could not detect Hadoop version — defaulting to 3.3.4"
+            HADOOP_VERSION="3.3.4"
+          fi
+
+          echo "Detected Hadoop version: $HADOOP_VERSION"
+          echo "Installing JARs to: $JAR_DIR"
+
+          # hadoop-aws: S3A filesystem implementation
+          wget -q \
+            "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_VERSION}/hadoop-aws-${HADOOP_VERSION}.jar" \
+            -O "$JAR_DIR/hadoop-aws-${HADOOP_VERSION}.jar"
+
+          # aws-java-sdk-bundle: AWS SDK required by hadoop-aws
+          wget -q \
+            "https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar" \
+            -O "$JAR_DIR/aws-java-sdk-bundle-1.12.262.jar"
+
+          echo "S3A JARs installed:"
+          ls -lh "$JAR_DIR"/hadoop-aws-*.jar "$JAR_DIR"/aws-java-sdk-bundle-*.jar
+
+      # 7. Verify PySpark and S3A are working
+      # Catches environment and JAR issues before the expensive download step.
+      - name: Verify PySpark environment
+        run: |
+          python -c "
+          import subprocess
+          from pyspark.sql import SparkSession
+
+          spark = (
+              SparkSession.builder
+              .appName('env_check')
+              .config('spark.hadoop.fs.s3a.impl', 'org.apache.hadoop.fs.s3a.S3AFileSystem')
+              .getOrCreate()
+          )
+          spark.sparkContext.setLogLevel('ERROR')
+
+          print(f'PySpark version  : {spark.version}')
+
+          result = subprocess.run(['java', '-version'], capture_output=True, text=True)
+          java_ver = result.stderr.strip().split('\n')[0]
+          print(f'Java version     : {java_ver}')
+
+          # Confirm the S3A class is resolvable — will raise if JARs are missing
+          sc = spark.sparkContext
+          sc._jvm.org.apache.hadoop.fs.s3a.S3AFileSystem
+          print('S3A JARs         : OK')
+
+          spark.stop()
+          print('Environment check passed.')
+          "
+
+      # 8. Determine run flags
+      # Builds the CLI argument string from the trigger type and manual inputs.
+      # Scheduled runs are always incremental. Manual runs use the selected mode.
+      - name: Determine run flags
+        id: flags
+        run: |
+          FLAGS=""
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            MODE="${{ github.event.inputs.mode }}"
+          else
+            MODE="incremental"
+          fi
+
+          case "$MODE" in
+            full)        FLAGS="$FLAGS --full" ;;
+            dry-run)     FLAGS="$FLAGS --dry-run" ;;
+            incremental) ;;
+          esac
+
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            FLAGS="$FLAGS --force"
+          fi
+
+          BUDGET="${{ github.event.inputs.budget_gb }}"
+          if [ -n "$BUDGET" ] && [ "$BUDGET" != "9" ]; then
+            FLAGS="$FLAGS --budget-gb $BUDGET"
+          fi
+
+          echo "flags=$FLAGS" >> $GITHUB_OUTPUT
+          echo "mode=$MODE"   >> $GITHUB_OUTPUT
+          echo "Run flags: $FLAGS"
+
+      # 9. Run ingestion pipeline
+      # All credentials are injected from GitHub Actions secrets — no .env file
+      # is present on the runner. The script reads them via os.getenv().
+      # PYSPARK_PYTHON ensures PySpark uses the same Python that was set up in
+      # step 3 rather than the system Python.
+      - name: Run UBPR ingestion pipeline
+        env:
+          R2_ENDPOINT:          ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID:     ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET:            ${{ secrets.R2_BUCKET }}
+          FFIEC_USER_ID:        ${{ secrets.FFIEC_USER_ID }}
+          FFIEC_PWS_TOKEN:      ${{ secrets.FFIEC_PWS_TOKEN }}
+          PYSPARK_PYTHON:       python
+          JAVA_HOME:            ${{ env.JAVA_HOME }}
+        run: |
+          echo "Starting UBPR ingestion — mode: ${{ steps.flags.outputs.mode }}"
+          python bigdata/ingestion/ubpr_ingest.py ${{ steps.flags.outputs.flags }}
+
+      # 10. Verify R2 output
+      # Lightweight post-ingestion check — scans R2 prefixes to confirm new
+      # quarters landed. Non-fatal (continue-on-error) so a scan failure does
+      # not mark the ingestion itself as failed.
+      - name: Verify R2 output
+        if: success() && steps.flags.outputs.mode != 'dry-run'
+        env:
+          R2_ENDPOINT:          ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID:     ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET:            ${{ secrets.R2_BUCKET }}
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, 'bigdata')
+          from queryengine.query_engine import ping_r2
+
+          result = ping_r2()
+          print('R2 health check:')
+          for k, v in result.items():
+              print(f'  {k:<25} {v}')
+
+          if result.get('status') != 'ok':
+              print('R2 health check failed — see logs above.')
+              sys.exit(1)
+          "
+        continue-on-error: true
+
+      # 11. Post run summary
+      # Writes a brief summary table to the GitHub Actions job summary page
+      # visible in the Actions UI after each run completes.
+      - name: Post run summary
+        if: always()
+        run: |
+          echo "## UBPR Ingestion Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Trigger | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Mode | ${{ steps.flags.outputs.mode }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Run flags | \`${{ steps.flags.outputs.flags }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Runner | ubuntu-latest |" >> $GITHUB_STEP_SUMMARY
+          echo "| Engine | PySpark + S3A |" >> $GITHUB_STEP_SUMMARY
