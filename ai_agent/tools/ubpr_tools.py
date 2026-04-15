@@ -5,7 +5,7 @@ from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
 
-_REQUEST_TIMEOUT = 25
+_REQUEST_TIMEOUT = 60
 
 
 def _backend_url() -> str:
