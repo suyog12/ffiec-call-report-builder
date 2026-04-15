@@ -1,9 +1,0 @@
-boto3
-pyspark==3.5.1
-duckdb
-pandas
-pyarrow
-requests
-ffiec-data-collector
-python-dotenv
-setuptools

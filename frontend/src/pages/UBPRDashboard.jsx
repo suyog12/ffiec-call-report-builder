@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import {
   fetchUBPRQuarters,
   fetchBanks,
@@ -45,7 +45,11 @@ function Spinner({ size = 36 }) {
   );
 }
 
-export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
+// forwardRef so App.jsx can call ubprRef.current.loadTrend(...)
+const UBPRDashboard = forwardRef(function UBPRDashboard(
+  { onBankLoaded, onQuartersLoaded },
+  ref
+) {
   const [tab, setTab]         = useState("summary");
   const [quarters, setQuarters] = useState([]);
   const [banks, setBanks]     = useState([]);
@@ -58,7 +62,9 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
   const [drill, setDrill]     = useState(null);
   const [drillLoading, setDrillLoading] = useState(false);
 
-  // Trend is NO LONGER fetched on Load — PerformanceTrends fetches lazily
+  // State that PerformanceTrends reads via props when chatbot triggers it
+  const [trendOverride, setTrendOverride] = useState(null);
+  // { metricCode: string, fromQuarter: string, toQuarter: string }
 
   useEffect(() => {
     fetchUBPRQuarters()
@@ -66,7 +72,7 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
         const qs = (d.quarters || []).slice().reverse();
         setQuarters(qs);
         if (qs.length > 0) setQuarter(qs[0]);
-        onQuartersLoaded?.(qs);  // notify App.jsx
+        onQuartersLoaded?.(qs);
       })
       .catch(() => {});
   }, []);
@@ -79,23 +85,28 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
       .catch(() => setBanks([]));
   }, [quarter]);
 
-  // Load only fetches ratios + peer — fast, always needed
-  const handleLoad = useCallback(async () => {
-    if (!bank || !quarter) return;
+  const handleLoad = useCallback(async (overrideBank, overrideQuarter) => {
+    const targetBank    = overrideBank    || bank;
+    const targetQuarter = overrideQuarter || quarter;
+    if (!targetBank || !targetQuarter) return;
+
+    if (overrideBank)    setBank(overrideBank);
+    if (overrideQuarter) setQuarter(overrideQuarter);
+
     setLoading(true);
     setError(null);
     setRatios(null);
     setPeer(null);
 
     try {
-      const rssd = String(bank.ID_RSSD);
+      const rssd = String(targetBank.ID_RSSD);
       const [r, p] = await Promise.all([
-        fetchUBPRRatios(rssd, quarter),
-        fetchUBPRPeerComparison(rssd, quarter),
+        fetchUBPRRatios(rssd, targetQuarter),
+        fetchUBPRPeerComparison(rssd, targetQuarter),
       ]);
       setRatios(r);
       setPeer(p);
-      onBankLoaded?.(bank, quarter);  // notify App.jsx for chat context
+      onBankLoaded?.(targetBank, targetQuarter);
     } catch (e) {
       setError(e.message || "Failed to load data. Check the backend connection.");
     } finally {
@@ -103,17 +114,54 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
     }
   }, [bank, quarter]);
 
-  // Drill-down: fetch 8-quarter trend for a single ratio code
+  // ── Imperative API exposed to parent via ref ──────────────────────────────
+  useImperativeHandle(ref, () => ({
+    /**
+     * Called by ChatPanel when chatbot says "show NPL trend from Q3 2023 to Q4 2025".
+     * Sets the bank, switches to Trends tab, and pre-selects the metric + range.
+     */
+    loadTrend({ rssdId, bankObj, quarterStr, metricCode, fromQuarter, toQuarter }) {
+      // Switch to trends tab
+      setTab("trends");
+
+      // If a different bank is being requested, update it
+      if (bankObj) {
+        setBank(bankObj);
+        if (quarterStr) setQuarter(quarterStr);
+      } else if (rssdId && banks.length > 0) {
+        const found = banks.find(b => String(b.ID_RSSD) === String(rssdId));
+        if (found) {
+          setBank(found);
+          if (quarterStr) setQuarter(quarterStr);
+        }
+      }
+
+      // Pass the metric + range override down to PerformanceTrends
+      setTrendOverride({
+        metricCode: metricCode || null,
+        fromQuarter: fromQuarter || null,
+        toQuarter: toQuarter || null,
+      });
+    },
+
+    /** Load a bank into the summary view */
+    loadSummary({ bankObj, quarterStr }) {
+      if (bankObj) setBank(bankObj);
+      if (quarterStr) setQuarter(quarterStr);
+      setTab("summary");
+      handleLoad(bankObj, quarterStr);
+    },
+  }), [banks, handleLoad]);
+
   const handleRatioClick = useCallback(async ({ ratio }) => {
     if (!bank || !quarter) return;
     setDrillLoading(true);
-    setDrill({ ratio, trendData: [] }); // open modal immediately with spinner
+    setDrill({ ratio, trendData: [] });
     try {
       const rssd  = String(bank.ID_RSSD);
       const qIdx  = quarters.indexOf(quarter);
       const fromQ = quarters[Math.min(qIdx + 7, quarters.length - 1)] || quarters[quarters.length - 1];
       const data  = await fetchUBPRTrend(rssd, fromQ, quarter, [ratio.key]);
-      // buildTrendByKey helper
       const byKey = {};
       (data.trend || []).forEach(row => {
         const q = row.quarter_date;
@@ -123,10 +171,8 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
           byKey[k].push({ quarter: q, value: v });
         });
       });
-      const points = byKey[ratio.key] || [];
-      setDrill({ ratio, trendData: points });
+      setDrill({ ratio, trendData: byKey[ratio.key] || [] });
     } catch (e) {
-      console.error("Drill-down trend fetch failed:", e);
       setDrill(prev => prev ? { ...prev, trendData: [] } : null);
     } finally {
       setDrillLoading(false);
@@ -175,7 +221,7 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
                 {quarters.map(q => <option key={q} value={q}>{formatQ(q)}</option>)}
               </select>
             </div>
-            <button onClick={handleLoad} disabled={!bank || !quarter || loading} style={{
+            <button onClick={() => handleLoad()} disabled={!bank || !quarter || loading} style={{
               padding: "10px 20px", fontSize: 13, fontWeight: 700,
               background: bank && !loading ? G : "#d4ddd8",
               color: bank && !loading ? "#fff" : "#8fa89a",
@@ -218,10 +264,15 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
               : !error && <EmptyState />
           )}
 
-          {/* Trends is always mounted when bank is set — manages its own data */}
           <div style={{ display: tab === "trends" ? "block" : "none" }}>
             {bank
-              ? <PerformanceTrends bank={bank} quarters={quarters} banks={banks} />
+              ? <PerformanceTrends
+                  bank={bank}
+                  quarters={quarters}
+                  banks={banks}
+                  trendOverride={trendOverride}
+                  onTrendOverrideConsumed={() => setTrendOverride(null)}
+                />
               : <EmptyState />
             }
           </div>
@@ -246,7 +297,9 @@ export default function UBPRDashboard({ onBankLoaded, onQuartersLoaded }) {
       )}
     </div>
   );
-}
+});
+
+export default UBPRDashboard;
 
 function EmptyState() {
   return (

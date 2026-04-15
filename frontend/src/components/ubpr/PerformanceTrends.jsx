@@ -10,7 +10,6 @@ const BORDER = "#e4e9e2";
 const BG     = "#f4f6f0";
 const TEXT   = "#1a2e20";
 const MUTED  = "#6b8878";
-const GOLD   = WM.gold;
 
 function downloadSVG(svgEl, filename) {
   const clone = svgEl.cloneNode(true);
@@ -31,25 +30,27 @@ function TrendSpinner() {
   );
 }
 
-// Build category → codes map from ALL known ratio codes (not from API response)
-// This lets user select metrics BEFORE fetching, so we only fetch what they need
 function buildCategoryMap() {
   const m = {};
   (ALL_RATIO_CODES || []).forEach(code => {
     const meta = getRatioMeta(code);
-    if (!meta?.label || meta.label === code) return; // skip unknown codes
+    if (!meta?.label || meta.label === code) return;
     if (!m[meta.category]) m[meta.category] = [];
     m[meta.category].push({ code, label: meta.label });
   });
   return m;
 }
 
-export default function PerformanceTrends({ bank, quarters = [] }) {
+export default function PerformanceTrends({
+  bank,
+  quarters = [],
+  banks,
+  trendOverride,           // { metricCode, fromQuarter, toQuarter } — set by chatbot
+  onTrendOverrideConsumed, // called after override is applied so parent can clear it
+}) {
   const bankName = String(bank?.Name || "").trim();
+  const allQuarters = quarters;
 
-  const allQuarters = quarters; // newest→oldest
-
-  // Default range: latest 8 quarters
   const defaultTo   = allQuarters[0] || "";
   const defaultFrom = allQuarters[Math.min(7, allQuarters.length - 1)] || "";
 
@@ -58,15 +59,11 @@ export default function PerformanceTrends({ bank, quarters = [] }) {
   const [selected, setSelected]   = useState(new Set());
   const [openCats, setOpenCats]   = useState(new Set());
   const [expanded, setExpanded]   = useState(null);
-
-  // Per-code trend data: { [code]: { data: [...], loading: bool, error: str|null } }
   const [chartData, setChartData] = useState({});
 
   const svgRefs = useRef({});
-
   const categoryMap = useMemo(() => buildCategoryMap(), []);
   const categories  = Object.keys(categoryMap).sort();
-
   const selectedList = [...selected];
   const [qStart, qEnd] = fromQ < toQ ? [fromQ, toQ] : [toQ, fromQ];
   const selectedQuarterCount = allQuarters.filter(q => q >= qStart && q <= qEnd).length;
@@ -74,19 +71,12 @@ export default function PerformanceTrends({ bank, quarters = [] }) {
   const toggleCat  = (cat)  => setOpenCats(prev => { const s = new Set(prev); s.has(cat)  ? s.delete(cat)  : s.add(cat);  return s; });
   const toggleCode = (code) => setSelected(prev  => { const s = new Set(prev); s.has(code) ? s.delete(code) : s.add(code); return s; });
 
-  /**
-   * Fetch trend for a set of codes. Called when:
-   * - User selects a new metric (fetch just that code)
-   * - User changes quarter range (re-fetch all selected codes)
-   */
   const fetchCodesData = useCallback(async (codes, from, to) => {
     if (!bank?.ID_RSSD || !codes.length || !from || !to) return;
-
     const rssdId = String(bank.ID_RSSD);
     const start  = from < to ? from : to;
     const end    = from < to ? to   : from;
 
-    // Mark all requested codes as loading
     setChartData(prev => {
       const next = { ...prev };
       codes.forEach(code => { next[code] = { ...(prev[code] || {}), loading: true, error: null }; });
@@ -96,49 +86,62 @@ export default function PerformanceTrends({ bank, quarters = [] }) {
     try {
       const response = await fetchUBPRTrend(rssdId, start, end, codes);
       const byKey = buildTrendByKey(response);
-
       setChartData(prev => {
         const next = { ...prev };
-        codes.forEach(code => {
-          next[code] = {
-            loading: false,
-            error: null,
-            points: byKey[code] || [],
-          };
-        });
+        codes.forEach(code => { next[code] = { loading: false, error: null, points: byKey[code] || [] }; });
         return next;
       });
     } catch (e) {
       setChartData(prev => {
         const next = { ...prev };
-        codes.forEach(code => {
-          next[code] = { loading: false, error: e.message || "Fetch failed", points: [] };
-        });
+        codes.forEach(code => { next[code] = { loading: false, error: e.message || "Fetch failed", points: [] }; });
         return next;
       });
     }
   }, [bank?.ID_RSSD]);
 
-  // When user selects a new code - fetch only that code
+  // ── Apply trendOverride from chatbot ──────────────────────────────────────
+  useEffect(() => {
+    if (!trendOverride) return;
+    const { metricCode, fromQuarter, toQuarter } = trendOverride;
+
+    if (fromQuarter) setFromQ(fromQuarter);
+    if (toQuarter)   setToQ(toQuarter);
+
+    if (metricCode) {
+      setSelected(new Set([metricCode]));
+
+      // Auto-open the category that contains this metric
+      const meta = getRatioMeta(metricCode);
+      if (meta?.category) {
+        setOpenCats(new Set([meta.category]));
+      }
+
+      // Fetch immediately with the override range
+      const from = fromQuarter || fromQ;
+      const to   = toQuarter   || toQ;
+      fetchCodesData([metricCode], from, to);
+    }
+
+    onTrendOverrideConsumed?.();
+  }, [trendOverride]);
+
+  // When user selects a new code
   const prevSelected = useRef(new Set());
   useEffect(() => {
     const added = [...selected].filter(c => !prevSelected.current.has(c));
     prevSelected.current = new Set(selected);
-    if (added.length > 0) {
-      fetchCodesData(added, fromQ, toQ);
-    }
+    if (added.length > 0) fetchCodesData(added, fromQ, toQ);
   }, [selected]);
 
-  // When quarter range changes - re-fetch all currently selected codes (debounced)
+  // When quarter range changes
   useEffect(() => {
     if (!selected.size) return;
-    const timer = setTimeout(() => {
-      fetchCodesData([...selected], fromQ, toQ);
-    }, 400);
+    const timer = setTimeout(() => { fetchCodesData([...selected], fromQ, toQ); }, 400);
     return () => clearTimeout(timer);
   }, [fromQ, toQ]);
 
-  // When bank changes - clear all chart data
+  // When bank changes
   useEffect(() => {
     setChartData({});
     setSelected(new Set());
@@ -168,9 +171,7 @@ export default function PerformanceTrends({ bank, quarters = [] }) {
       <div style={{ background: G, borderRadius: 14, padding: "20px 28px", color: "#fff" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.7, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>
-              Performance Trends
-            </div>
+            <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.7, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Performance Trends</div>
             <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>{bankName || "No bank selected"}</div>
             <div style={{ fontSize: 12, opacity: 0.8 }}>
               RSSD {bank?.ID_RSSD}{bank?.City ? ` · ${bank.City}` : ""}{bank?.State ? `, ${bank.State}` : ""}
@@ -331,15 +332,14 @@ export default function PerformanceTrends({ bank, quarters = [] }) {
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={() => { const el = svgRefs.current[code]; if (el) downloadSVG(el, `${bankName.slice(0,15)}_${meta.label.slice(0,20)}`); }}
-                      title="Download SVG"
                       style={{ padding: "5px 9px", fontSize: 11, color: MUTED, background: BG, border: `1px solid ${BORDER}`, borderRadius: 6, cursor: "pointer" }}>
                       ↓ SVG
                     </button>
-                    <button onClick={() => setExpanded(isExpanded ? null : code)} title={isExpanded ? "Collapse" : "Expand"}
+                    <button onClick={() => setExpanded(isExpanded ? null : code)}
                       style={{ padding: "5px 9px", fontSize: 13, color: isExpanded ? G : MUTED, background: isExpanded ? `${G}12` : BG, border: `1px solid ${BORDER}`, borderRadius: 6, cursor: "pointer" }}>
                       {isExpanded ? "⊡" : "⊞"}
                     </button>
-                    <button onClick={() => toggleCode(code)} title="Remove"
+                    <button onClick={() => toggleCode(code)}
                       style={{ padding: "5px 9px", fontSize: 13, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, cursor: "pointer" }}>
                       ×
                     </button>

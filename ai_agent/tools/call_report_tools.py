@@ -1,38 +1,46 @@
-import os
+import asyncio
 import logging
-import requests
+from typing import TYPE_CHECKING
 from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
 
-_REQUEST_TIMEOUT = 60
+if TYPE_CHECKING:
+    from app.services.report_service import ReportService
+    from app.services.period_service import PeriodService
 
 
-def _backend_url() -> str:
-    return os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+def _report_svc() -> "ReportService":
+    from app.services.report_service import ReportService  # noqa: PLC0415
+    return ReportService()
 
 
-def _get(path: str, params: dict) -> dict:
-    resp = requests.get(
-        f"{_backend_url()}{path}",
-        params=params,
-        timeout=_REQUEST_TIMEOUT,
-    )
-    resp.raise_for_status()
-    return resp.json()
+def _period_svc() -> "PeriodService":
+    from app.services.period_service import PeriodService  # noqa: PLC0415
+    return PeriodService()
 
 
-def _fmt_dollars(v) -> str:
+def _run(coro):
+    """Run an async coroutine safely from a sync context inside FastAPI."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures  # noqa: PLC0415
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(asyncio.run, coro).result()
+        return loop.run_until_complete(coro)
+    except RuntimeError:
+        return asyncio.run(coro)
+
+
+def _fmt(v) -> str:
     if v is None:
         return "N/A"
     try:
         n = float(v)
-        if abs(n) >= 1e12:
-            return f"${n / 1e12:.2f}T"
-        if abs(n) >= 1e9:
-            return f"${n / 1e9:.2f}B"
-        if abs(n) >= 1e6:
-            return f"${n / 1e6:.2f}M"
+        if abs(n) >= 1e12: return f"${n/1e12:.2f}T"
+        if abs(n) >= 1e9:  return f"${n/1e9:.2f}B"
+        if abs(n) >= 1e6:  return f"${n/1e6:.2f}M"
         return f"${n:,.0f}"
     except (TypeError, ValueError):
         return str(v)
@@ -47,18 +55,10 @@ def get_available_periods() -> str:
         List of available quarter-end dates in MM/DD/YYYY format, most recent first.
     """
     try:
-        resp = requests.get(f"{_backend_url()}/periods/", timeout=15)
-        resp.raise_for_status()
-        periods = resp.json()
+        periods = _run(_period_svc().get_periods())
         if isinstance(periods, list):
             return f"Available periods ({len(periods)} total): " + ", ".join(periods[:12])
         return str(periods)
-    except requests.exceptions.Timeout:
-        logger.warning("Timeout fetching available periods")
-        return "Request timed out fetching available periods."
-    except requests.exceptions.HTTPError as exc:
-        logger.error("HTTP %s fetching available periods", exc.response.status_code)
-        return f"Backend returned {exc.response.status_code} fetching periods."
     except Exception as exc:
         logger.exception("Unexpected error in get_available_periods")
         return f"Error fetching periods: {exc}"
@@ -74,27 +74,18 @@ def get_bank_metrics(rssd_id: str, reporting_period: str) -> str:
         reporting_period: Period in MM/DD/YYYY format (e.g. "12/31/2025")
 
     Returns:
-        Key metrics including total assets, loans, deposits, equity, net income,
-        and computed ratios like equity-to-assets and loans-to-deposits.
+        Key metrics including total assets, loans, deposits, equity, net income.
     """
     try:
-        data = _get("/reports/metrics", {"rssd_id": rssd_id, "reporting_period": reporting_period})
-        metrics = data.get("metrics", {})
+        svc = _report_svc()
+        data = _run(svc.get_sdf_report(int(rssd_id), reporting_period))
+        metrics = svc.build_metrics(data["all_rows"])
         if not metrics:
             return f"No metrics found for RSSD {rssd_id} for period {reporting_period}."
         lines = [f"Call Report Metrics — RSSD {rssd_id} ({reporting_period}):"]
         for key, val in metrics.items():
-            lines.append(f"  {key.replace('_', ' ').title()}: {_fmt_dollars(val)}")
+            lines.append(f"  {key.replace('_', ' ').title()}: {_fmt(val)}")
         return "\n".join(lines)
-    except requests.exceptions.Timeout:
-        logger.warning("Timeout fetching metrics for RSSD %s", rssd_id)
-        return f"Request timed out fetching metrics for RSSD {rssd_id}."
-    except requests.exceptions.HTTPError as exc:
-        status = exc.response.status_code
-        if status == 404:
-            return f"No Call Report filing found for RSSD {rssd_id} for period {reporting_period}."
-        logger.error("HTTP %s fetching metrics for RSSD %s", status, rssd_id)
-        return f"Backend returned {status} for RSSD {rssd_id} ({reporting_period})."
     except Exception as exc:
         logger.exception("Unexpected error in get_bank_metrics")
         return f"Error fetching metrics: {exc}"
@@ -109,21 +100,14 @@ def get_schedule_data(rssd_id: str, reporting_period: str, schedules: str = "RC,
         rssd_id: Bank RSSD ID
         reporting_period: Period in MM/DD/YYYY format
         schedules: Comma-separated schedule codes e.g. "RC,RI,RC-C"
-                   RC = Balance Sheet, RI = Income Statement, RC-C = Loans
 
     Returns:
         Top 10 line items per schedule with item codes, descriptions, and values.
     """
     try:
+        svc = _report_svc()
         schedule_list = [s.strip() for s in schedules.split(",") if s.strip()]
-        data = _get(
-            "/reports/section-data",
-            {
-                "rssd_id": rssd_id,
-                "reporting_period": reporting_period,
-                "sections": schedule_list,
-            },
-        )
+        data = _run(svc.get_selected_sections(int(rssd_id), reporting_period, schedule_list))
         sections = data.get("sections", {})
         if not sections:
             return f"No schedule data found for schedules: {schedules}."
@@ -133,20 +117,11 @@ def get_schedule_data(rssd_id: str, reporting_period: str, schedules: str = "RC,
             for row in rows[:10]:
                 code = row.get("item_code", "")
                 desc = row.get("description", "")[:48]
-                val = row.get("value", "")
+                val  = row.get("value", "")
                 lines.append(f"    {code:<12} {desc:<50} {val}")
             if len(rows) > 10:
                 lines.append(f"    ... and {len(rows) - 10} more rows")
         return "\n".join(lines)
-    except requests.exceptions.Timeout:
-        logger.warning("Timeout fetching schedule data for RSSD %s", rssd_id)
-        return f"Request timed out fetching schedule data for RSSD {rssd_id}."
-    except requests.exceptions.HTTPError as exc:
-        status = exc.response.status_code
-        if status == 404:
-            return f"No filing found for RSSD {rssd_id} for period {reporting_period}."
-        logger.error("HTTP %s fetching schedule data for RSSD %s", status, rssd_id)
-        return f"Backend returned {status} for RSSD {rssd_id}."
     except Exception as exc:
         logger.exception("Unexpected error in get_schedule_data")
         return f"Error fetching schedule data: {exc}"
@@ -165,21 +140,9 @@ def get_available_schedules(rssd_id: str, reporting_period: str) -> str:
         List of schedule codes present in this bank's filing.
     """
     try:
-        data = _get(
-            "/reports/available-sections",
-            {"rssd_id": rssd_id, "reporting_period": reporting_period},
-        )
+        data = _run(_report_svc().get_sdf_report(int(rssd_id), reporting_period))
         sections = data.get("available_sections", [])
         return f"Available schedules — RSSD {rssd_id} ({reporting_period}): {', '.join(sections)}"
-    except requests.exceptions.Timeout:
-        logger.warning("Timeout fetching available schedules for RSSD %s", rssd_id)
-        return f"Request timed out fetching schedules for RSSD {rssd_id}."
-    except requests.exceptions.HTTPError as exc:
-        status = exc.response.status_code
-        if status == 404:
-            return f"No filing found for RSSD {rssd_id} for period {reporting_period}."
-        logger.error("HTTP %s fetching schedules for RSSD %s", status, rssd_id)
-        return f"Backend returned {status} for RSSD {rssd_id}."
     except Exception as exc:
         logger.exception("Unexpected error in get_available_schedules")
         return f"Error fetching schedules: {exc}"

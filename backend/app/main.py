@@ -2,8 +2,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import sys
-from typing import Optional, Any, Union
-from langchain_core.runnables import RunnableConfig
 
 from app.routes import health, periods, banks, reports, ubpr
 
@@ -22,15 +20,18 @@ except Exception as e:
 
 app = FastAPI(title="FFIEC Call Report API")
 
-_extra = os.getenv("ALLOWED_ORIGIN", "")
-
+# All allowed origins — dev and production hardcoded so both always work
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "https://ffiec-call-report-builder.vercel.app",
+    "https://ffiec-call-report-builder-4c8xo2lsu-suyog12s-projects.vercel.app",
 ]
-
+# Optional extra origins from env (comma-separated)
+_extra = os.getenv("ALLOWED_ORIGIN", "")
 if _extra:
-    origins.append(_extra)
+    origins.extend([o.strip() for o in _extra.split(",") if o.strip()])
 
 app.add_middleware(
     CORSMiddleware,

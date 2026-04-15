@@ -14,21 +14,26 @@ h1,h2,h3,h4 { line-height: 1.2; }
 /* ── Layout ─────────────────────────────────────────────────── */
 .app-shell {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* ── Sidebar ─────────────────────────────────────────────────── */
 .sidebar {
   width: 272px;
   min-width: 272px;
+  height: 100vh;
   background: #115740;
   color: #cbd5e1;
   display: flex;
   flex-direction: column;
-  transition: width 0.25s ease;
-  position: relative;
-  z-index: 10;
+  flex-shrink: 0;
+  transition: width 0.25s ease, min-width 0.25s ease;
+  position: sticky;
+  top: 0;
+  left: 0;
   overflow: hidden;
+  z-index: 10;
 }
 .sidebar.collapsed { width: 0; min-width: 0; }
 
@@ -84,9 +89,10 @@ h1,h2,h3,h4 { line-height: 1.2; }
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100vh;
+  overflow: hidden;
   background: #f4f6f0;
   transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
 }
 
 /* ── Top bar ─────────────────────────────────────────────────── */
@@ -98,9 +104,10 @@ h1,h2,h3,h4 { line-height: 1.2; }
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-shrink: 0;
   position: sticky;
   top: 0;
-  z-index: 9;
+  z-index: 20;
 }
 
 .topbar-toggle {
@@ -174,6 +181,7 @@ h1,h2,h3,h4 { line-height: 1.2; }
   padding: 28px;
   flex: 1;
   overflow-y: auto;
+  height: 0;
 }
 
 /* ── Cards ───────────────────────────────────────────────────── */

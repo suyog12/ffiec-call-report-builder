@@ -1,56 +1,108 @@
+"""
+orchestrator.py
+
+Three routing paths:
+
+  1. Out-of-scope  (weather, sports, cooking…)
+       → canned reply, zero API calls
+
+  2. Data question  (anything answerable from UBPR / Call Report APIs)
+       → LangGraph ReAct agent + LangChain tools
+       → Tools call UBPRService / ReportService directly (in-process, no HTTP)
+       → Gemini is used only to decide which tool to call and format the answer
+
+  3. Financial knowledge  (explain CET1, what is Basel III, how is ROA calculated…)
+       → Gemini called directly, no tools
+       → Only when no bank data is needed at all
+
+Rule: if the answer exists in our application data → tools answer it.
+Gemini is the last resort for knowledge-only questions.
+"""
+
 import os
 import logging
 from dotenv import load_dotenv
-load_dotenv()
-from typing import TYPE_CHECKING, Any, Iterator, Optional, Union, cast
+load_dotenv(override=False)
+
+from typing import Any, Iterator, Optional
 from langchain_core.runnables import RunnableConfig
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 from memory.checkpointer import get_checkpointer
 
-if TYPE_CHECKING:
-    from agents.ubpr_agent import run_ubpr_agent
-    from agents.call_report_agent import run_call_report_agent
-
 logger = logging.getLogger(__name__)
 
-_ORCHESTRATOR_AGENT = None
+_DATA_AGENT = None
 _request_count = 0
 _MONTHLY_REQUEST_LIMIT = 14_000
 
-# ---------------------------------------------------------------------------
-# Keyword sets for routing (no LLM needed for clear-cut questions)
-# ---------------------------------------------------------------------------
+# ── Keyword sets ──────────────────────────────────────────────────────────────
 
-_UBPR_KEYWORDS = frozenset([
-    "ratio", "roa", "roe", "nim", "net interest margin", "return on",
-    "capital", "cet1", "tier 1", "tier1", "leverage", "peer", "benchmark",
-    "regulatory", "well-capitalized", "adequately capitalized", "ubpr",
-    "charge-off", "npl", "nonperforming", "loan-to-deposit", "liquidity",
-    "profitability", "asset quality",
-])
-
-_CALL_REPORT_KEYWORDS = frozenset([
+_DATA_KEYWORDS = frozenset([
+    "ratio", "roa", "roe", "nim", "net interest margin", "return on assets",
+    "return on equity", "capital", "cet1", "tier 1", "tier1", "leverage",
+    "peer", "benchmark", "compare", "well-capitalized", "adequately capitalized",
+    "undercapitalized", "regulatory", "ubpr", "charge-off", "npl",
+    "nonperforming", "non-performing", "loan-to-deposit", "liquidity",
+    "profitability", "asset quality", "trend", "over time", "historical",
     "balance sheet", "income statement", "schedule rc", "schedule ri",
     "schedule rc-c", "total assets", "total deposits", "total loans",
     "net income", "equity", "filing", "call report", "period", "report",
-    "load", "view", "open", "facsimile", "pdf",   # "show" removed
+    "facsimile", "deposits", "loans", "assets", "metrics", "performance",
+    "show me", "what is this bank", "this bank", "for this bank",
+    "show the", "show trend", "show ratio",
 ])
 
-# Questions that are clearly not bank-financial analysis — answer inline without Gemini
+_KNOWLEDGE_KEYWORDS = frozenset([
+    "what is basel", "what is cet1", "what is tier 1", "what is leverage ratio",
+    "explain ", "define ", "what does ", "how is roa", "how is roe", "how is nim",
+    "difference between", "tell me about basel", "what are capital requirements",
+    "how does capital", "why is capital ratio", "meaning of",
+    "what is a call report", "what is ubpr", "what is ffiec",
+])
+
 _OUT_OF_SCOPE_KEYWORDS = frozenset([
-    "weather", "recipe", "sports", "movie", "music", "song", "joke",
-    "news", "politics", "travel", "hotel", "flight", "stock price",
-    "crypto", "bitcoin", "coding", "python", "javascript", "write an essay",
-    "write a poem", "translate", "who are you", "what are you",
+    "weather", "recipe", "sports score", "movie", "music", "song lyrics",
+    "joke", "politics", "travel destination", "hotel booking", "flight",
+    "stock price", "crypto", "bitcoin", "write me a poem", "write an essay",
+    "translate this", "who are you", "what are you",
 ])
 
 _OUT_OF_SCOPE_REPLY = (
     "I am specialized in FFIEC bank financial analysis and cannot help with that. "
     "I can answer questions about Call Report filings, UBPR financial ratios, "
-    "peer group benchmarking, and regulatory capital adequacy."
+    "peer group benchmarking, regulatory capital adequacy, and general banking concepts."
 )
+
+_KNOWLEDGE_SYSTEM_PROMPT = (
+    "You are an expert in U.S. bank regulatory reporting and financial analysis. "
+    "Answer the user's question about banking concepts, regulations, or financial metrics "
+    "clearly and concisely. Focus on FFIEC, UBPR, Call Reports, Basel III, and related topics. "
+    "Keep answers under 200 words unless detail is essential."
+)
+
+_DATA_AGENT_PROMPT = """You are an expert FFIEC financial analyst assistant for the FFIEC Call Report \
+Analysis Dashboard built by William & Mary MSBA Team 9.
+
+You have tools to fetch real bank data. ALWAYS use tools to answer — never guess or invent numbers.
+
+Available tools:
+- get_ubpr_ratios: all UBPR financial ratios for a bank/quarter (ROA, ROE, NIM, CET1, etc.)
+- get_peer_comparison: compare bank ratios vs peer group averages
+- get_ubpr_trend: trend data across quarters for any metric
+- flag_regulatory_issues: Basel III capital adequacy status
+- get_bank_metrics: Call Report key financials (assets, loans, deposits, equity, net income)
+- get_schedule_data: detailed Call Report schedule line items (RC, RI, RC-C)
+- get_available_schedules: list available schedules in a filing
+- get_available_periods: list available reporting periods
+
+The user's message starts with [Context — Bank: ..., RSSD ID: ..., Quarter: ...].
+Always use this context when calling tools. Do not ask the user to repeat it.
+
+Format answers clearly. Include metric names, values, and units.
+For regulatory status always state: well-capitalized, adequately capitalized, or undercapitalized.
+"""
 
 _SESSION_CONTEXT: dict = {
     "rssd_id": None,
@@ -61,123 +113,54 @@ _SESSION_CONTEXT: dict = {
     "thread_id": "default",
 }
 
-# The orchestrator LLM prompt — only reached for genuinely ambiguous questions
-ORCHESTRATOR_SYSTEM_PROMPT = (
-    "You are the master orchestrator for the FFIEC Call Report Analysis Dashboard "
-    "built by William & Mary MSBA Team 9, Class of 2026.\n\n"
-    "This dashboard analyzes U.S. bank financial data from two sources:\n"
-    "1. FFIEC Call Reports — quarterly regulatory filings with balance sheets, income statements, loan data\n"
-    "2. UBPR — pre-calculated financial ratios and peer comparisons\n\n"
-    "Your job:\n"
-    "1. Understand what the user is asking\n"
-    "2. The message will contain [Context — ...] with bank name, RSSD ID and quarter. Always use this context.\n"
-    "3. Route to the correct sub-agent:\n"
-    "   - analyze_financial_performance: ratios, ROA, ROE, NIM, capital, peer comparison, regulatory status, trends\n"
-    "   - analyze_call_report: balance sheet, income, loans, deposits, specific schedule data, report periods\n"
-    "4. Synthesize the response clearly\n"
-    "5. Never ask the user to provide bank name, RSSD ID, or quarter if already in the context\n\n"
-    "If the user asks about anything not related to bank financial analysis, Call Reports, or UBPR data, "
-    "respond only with: \"I am specialized in FFIEC bank financial analysis and cannot help with that. "
-    "I can answer questions about Call Report filings, UBPR financial ratios, peer group benchmarking, "
-    "and regulatory capital adequacy.\""
-)
-
 
 def _get_key() -> str:
     return os.getenv("GEMINI_API_KEY", "")
 
 
-def _route_by_keyword(question: str) -> Optional[str]:
-    """
-    Classify the question as 'ubpr', 'call_report', 'out_of_scope', or None.
-    Returns None only when the question is genuinely ambiguous (needs LLM routing).
-    """
+def _route(question: str, rssd_id: Optional[str]) -> str:
+    """Return 'out_of_scope' | 'data' | 'knowledge'."""
     q = question.lower()
-
-    # Fast out-of-scope check — no Gemini call needed
     if any(kw in q for kw in _OUT_OF_SCOPE_KEYWORDS):
         return "out_of_scope"
-
-    ubpr_score = sum(1 for kw in _UBPR_KEYWORDS if kw in q)
-    call_score = sum(1 for kw in _CALL_REPORT_KEYWORDS if kw in q)
-    if ubpr_score == call_score:
-        return None  # Ambiguous → fall through to orchestrator (Gemini)
-    return "ubpr" if ubpr_score > call_score else "call_report"
-
-
-@tool
-def analyze_financial_performance(question: str) -> str:
-    """
-    Route to the UBPR Financial Analysis agent.
-    Use for: financial ratios, capital adequacy, ROA, ROE, NIM,
-    peer comparisons, regulatory status, trends, CET1, leverage.
-
-    Args:
-        question: The user's financial analysis question
-
-    Returns:
-        Detailed financial analysis with ratio values and context
-    """
-    from agents.ubpr_agent import run_ubpr_agent as _run_ubpr  # noqa: PLC0415
-    ctx = _SESSION_CONTEXT
-    return cast(str, _run_ubpr(
-        question=question,
-        rssd_id=ctx["rssd_id"],
-        bank_name=ctx["bank_name"],
-        quarter=ctx["quarter"],
-        thread_id=ctx["thread_id"] + "_ubpr",
-    ))
+    if any(kw in q for kw in _DATA_KEYWORDS):
+        return "data"
+    if any(kw in q for kw in _KNOWLEDGE_KEYWORDS):
+        return "knowledge"
+    # If bank context is present, default to data — user is asking about a specific bank
+    if rssd_id:
+        return "data"
+    return "knowledge"
 
 
-@tool
-def analyze_call_report(question: str) -> str:
-    """
-    Route to the Call Report agent.
-    Use for: balance sheet, income, loans, deposits, specific
-    schedule data, loading a report period, filing data.
-
-    Args:
-        question: The user's call report question
-
-    Returns:
-        Call Report data summary and navigation instructions
-    """
-    from agents.call_report_agent import run_call_report_agent as _run_cr  # noqa: PLC0415
-    ctx = _SESSION_CONTEXT
-    return cast(str, _run_cr(
-        question=question,
-        rssd_id=ctx["rssd_id"],
-        bank_name=ctx["bank_name"],
-        period=ctx["period"],
-        available_periods=ctx["available_periods"],
-        thread_id=ctx["thread_id"] + "_call",
-    ))
-
-
-def _build_orchestrator():
-    """
-    The orchestrator LLM agent — only instantiated and called for ambiguous queries.
-    Its tools (analyze_financial_performance, analyze_call_report) now dispatch
-    to LLM-free sub-agents, so Gemini only does routing + synthesis here.
-    """
+def _build_data_agent():
+    from tools.ubpr_tools import (  # noqa: PLC0415
+        get_ubpr_ratios, get_peer_comparison, get_ubpr_trend, flag_regulatory_issues,
+    )
+    from tools.call_report_tools import (  # noqa: PLC0415
+        get_available_periods, get_bank_metrics, get_schedule_data, get_available_schedules,
+    )
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.0-flash",
         google_api_key=_get_key(),
-        temperature=0.1,
+        temperature=0.0,
     )
     return create_react_agent(
         llm,
-        tools=[analyze_financial_performance, analyze_call_report],
+        tools=[
+            get_ubpr_ratios, get_peer_comparison, get_ubpr_trend, flag_regulatory_issues,
+            get_available_periods, get_bank_metrics, get_schedule_data, get_available_schedules,
+        ],
         checkpointer=get_checkpointer(),
-        prompt=ORCHESTRATOR_SYSTEM_PROMPT,
+        prompt=_DATA_AGENT_PROMPT,
     )
 
 
-def _get_orchestrator():
-    global _ORCHESTRATOR_AGENT
-    if _ORCHESTRATOR_AGENT is None:
-        _ORCHESTRATOR_AGENT = _build_orchestrator()
-    return _ORCHESTRATOR_AGENT
+def _get_data_agent():
+    global _DATA_AGENT
+    if _DATA_AGENT is None:
+        _DATA_AGENT = _build_data_agent()
+    return _DATA_AGENT
 
 
 def set_session_context(
@@ -210,39 +193,39 @@ def _check_rate_limit() -> Optional[str]:
     return None
 
 
-def _handle_llm_error(exc: Exception) -> str:
+def _handle_error(exc: Exception) -> str:
     msg = str(exc)
     if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
         return (
-            "The AI assistant is temporarily unavailable due to API rate limits. "
-            "This is a free-tier quota limitation that resets daily at midnight Pacific Time."
+            "The AI assistant is temporarily unavailable due to API quota limits. "
+            "Please try again in a few moments."
         )
     if "404" in msg or "NOT_FOUND" in msg:
-        return "The AI model is currently unavailable. Please try again in a few moments."
+        return "The AI model is currently unavailable. Please try again shortly."
     if "401" in msg or "403" in msg or "API_KEY" in msg.upper():
         return "Invalid or missing Gemini API key. Please check your GEMINI_API_KEY configuration."
     logger.error("LLM error: %s", msg[:300])
     return f"The AI assistant encountered an error: {msg[:200]}"
 
 
-def _build_user_message(
+def _build_context_message(
     question: str,
     rssd_id: Optional[str],
     bank_name: Optional[str],
     quarter: Optional[str],
     period: Optional[str],
 ) -> str:
-    context_parts = []
+    parts = []
     if bank_name:
-        context_parts.append(f"Bank: {bank_name}")
+        parts.append(f"Bank: {bank_name}")
     if rssd_id:
-        context_parts.append(f"RSSD ID: {rssd_id}")
+        parts.append(f"RSSD ID: {rssd_id}")
     if quarter:
-        context_parts.append(f"Quarter: {quarter}")
+        parts.append(f"Quarter: {quarter}")
     if period:
-        context_parts.append(f"Period: {period}")
-    if context_parts:
-        return f"[Context — {', '.join(context_parts)}]\n{question}"
+        parts.append(f"Period: {period}")
+    if parts:
+        return f"[Context — {', '.join(parts)}]\n{question}"
     return question
 
 
@@ -256,102 +239,71 @@ def chat(
     thread_id: str = "default",
     stream: bool = False,
 ) -> Any:
-    """
-    Main entry point.
-
-    Routing logic (in order):
-      1. Out-of-scope keywords   → return canned reply, no API call
-      2. Clear UBPR keywords     → run_ubpr_agent() directly, no Gemini
-      3. Clear Call Report kws   → run_call_report_agent() directly, no Gemini
-      4. Ambiguous (score tie)   → Gemini orchestrator (Gemini IS called here)
-
-    Gemini is only invoked in case 4, and only for the routing + synthesis step.
-    The tool functions the orchestrator calls also resolve without a second LLM call.
-    """
     limit_msg = _check_rate_limit()
     if limit_msg:
         return limit_msg
 
     set_session_context(
-        rssd_id=rssd_id,
-        bank_name=bank_name,
-        quarter=quarter,
-        period=period,
+        rssd_id=rssd_id, bank_name=bank_name,
+        quarter=quarter, period=period,
         available_periods=available_periods,
         thread_id=thread_id,
     )
 
-    route = _route_by_keyword(question)
+    route = _route(question, rssd_id)
+    logger.debug("Route: %s | thread: %s | q: %s", route, thread_id, question[:80])
 
-    # ── 1. Out of scope ────────────────────────────────────────────────────
+    # ── 1. Out of scope ───────────────────────────────────────────────────────
     if route == "out_of_scope":
-        logger.debug("Keyword router: out-of-scope, no API call")
         return _OUT_OF_SCOPE_REPLY
 
-    # ── 2. Clear UBPR path ─────────────────────────────────────────────────
-    if route == "ubpr":
-        from agents.ubpr_agent import run_ubpr_agent as _run_ubpr  # noqa: PLC0415
-        logger.debug("Keyword router: UBPR direct dispatch (no Gemini) for thread %s", thread_id)
+    # ── 2. Data question → LangGraph + tools ─────────────────────────────────
+    if route == "data":
+        agent = _get_data_agent()
+        msg = _build_context_message(question, rssd_id, bank_name, quarter, period)
+        config: RunnableConfig = {
+            "configurable": {"thread_id": thread_id},
+            "recursion_limit": 6,
+        }
+        if stream:
+            try:
+                return agent.stream(
+                    {"messages": [{"role": "user", "content": msg}]},
+                    config=config,
+                    stream_mode="messages",
+                )
+            except Exception as exc:
+                err = _handle_error(exc)
+                def _err_stream() -> Iterator[tuple]:
+                    yield err, {}
+                return _err_stream()
         try:
-            return _run_ubpr(
-                question=question,
-                rssd_id=rssd_id,
-                bank_name=bank_name,
-                quarter=quarter,
-                thread_id=thread_id + "_ubpr",
-                stream=stream,
-            )
-        except Exception as exc:
-            return _handle_llm_error(exc)
-
-    # ── 3. Clear Call Report path ──────────────────────────────────────────
-    if route == "call_report":
-        from agents.call_report_agent import run_call_report_agent as _run_cr  # noqa: PLC0415
-        logger.debug("Keyword router: Call Report direct dispatch (no Gemini) for thread %s", thread_id)
-        try:
-            return _run_cr(
-                question=question,
-                rssd_id=rssd_id,
-                bank_name=bank_name,
-                period=period,
-                available_periods=available_periods,
-                thread_id=thread_id + "_call",
-                stream=stream,
-            )
-        except Exception as exc:
-            return _handle_llm_error(exc)
-
-    # ── 4. Ambiguous → Gemini orchestrator ────────────────────────────────
-    logger.debug("Keyword router: ambiguous → Gemini orchestrator for thread %s", thread_id)
-    agent = _get_orchestrator()
-    user_message = _build_user_message(question, rssd_id, bank_name, quarter, period)
-    config: RunnableConfig = {
-        "configurable": {"thread_id": thread_id},
-        "recursion_limit": 8,
-    }
-
-    if stream:
-        try:
-            return agent.stream(
-                {"messages": [{"role": "user", "content": user_message}]},
+            result = agent.invoke(
+                {"messages": [{"role": "user", "content": msg}]},
                 config=config,
-                stream_mode="messages",
             )
+            content = result["messages"][-1].content
+            if isinstance(content, list):
+                return " ".join(b.get("text", "") for b in content if isinstance(b, dict))
+            return content
         except Exception as exc:
-            err = _handle_llm_error(exc)
-            def _err_stream() -> Iterator[tuple[str, dict]]:
-                yield err, {}
-            return _err_stream()
+            return _handle_error(exc)
 
+    # ── 3. Financial knowledge → Gemini directly, no tools ───────────────────
     try:
-        result = agent.invoke(
-            {"messages": [{"role": "user", "content": user_message}]},
-            config=config,
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.0-flash",
+            google_api_key=_get_key(),
+            temperature=0.1,
         )
-        content = result["messages"][-1].content
+        messages = [
+            SystemMessage(content=_KNOWLEDGE_SYSTEM_PROMPT),
+            HumanMessage(content=question),
+        ]
+        response = llm.invoke(messages)
+        content = response.content
         if isinstance(content, list):
             return " ".join(b.get("text", "") for b in content if isinstance(b, dict))
         return content
     except Exception as exc:
-        logger.exception("Orchestrator invoke failed for thread %s", thread_id)
-        return _handle_llm_error(exc)
+        return _handle_error(exc)

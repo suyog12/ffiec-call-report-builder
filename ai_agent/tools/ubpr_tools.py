@@ -1,20 +1,16 @@
-import os
 import logging
-import requests
+from typing import TYPE_CHECKING
 from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
 
-_REQUEST_TIMEOUT = 60
-
-
-def _backend_url() -> str:
-    return os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+if TYPE_CHECKING:
+    from app.services.ubpr_service import UBPRService
 
 REGULATORY_THRESHOLDS = {
-    "CET1 Ratio":    {"well": 8.0,  "adequate": 6.0, "min": 4.5},
+    "CET1 Ratio":     {"well": 8.0,  "adequate": 6.0, "min": 4.5},
     "Tier 1 Capital": {"well": 10.0, "adequate": 8.0, "min": 6.0},
-    "Total Capital": {"well": 10.0, "adequate": 8.0, "min": 8.0},
+    "Total Capital":  {"well": 10.0, "adequate": 8.0, "min": 8.0},
     "Leverage Ratio": {"well": 5.0,  "adequate": 4.0, "min": 4.0},
 }
 
@@ -26,14 +22,9 @@ CAPITAL_RATIO_CODES = {
 }
 
 
-def _get(path: str, params: dict) -> dict:
-    resp = requests.get(
-        f"{_backend_url()}{path}",
-        params=params,
-        timeout=_REQUEST_TIMEOUT,
-    )
-    resp.raise_for_status()
-    return resp.json()
+def _svc() -> "UBPRService":
+    from app.services.ubpr_service import UBPRService  # noqa: PLC0415
+    return UBPRService()
 
 
 @tool
@@ -49,7 +40,7 @@ def get_ubpr_ratios(rssd_id: str, quarter_date: str) -> str:
         Top 15 ratio code/value pairs for the bank and quarter.
     """
     try:
-        data = _get("/ubpr/ratios", {"rssd_id": rssd_id, "quarter_date": quarter_date})
+        data = _svc().get_key_ratios(rssd_id, quarter_date)
         ratios = {k: v for k, v in data.get("ratios", {}).items() if v is not None}
         if not ratios:
             return f"No UBPR ratio data found for RSSD {rssd_id} in quarter {quarter_date}."
@@ -57,12 +48,6 @@ def get_ubpr_ratios(rssd_id: str, quarter_date: str) -> str:
         for code, value in list(ratios.items())[:15]:
             lines.append(f"  {code}: {value}")
         return "\n".join(lines)
-    except requests.exceptions.Timeout:
-        logger.warning("Timeout fetching UBPR ratios for RSSD %s", rssd_id)
-        return f"Request timed out fetching UBPR ratios for RSSD {rssd_id}."
-    except requests.exceptions.HTTPError as exc:
-        logger.error("HTTP %s fetching UBPR ratios for RSSD %s", exc.response.status_code, rssd_id)
-        return f"Backend returned {exc.response.status_code} for RSSD {rssd_id} ({quarter_date})."
     except Exception as exc:
         logger.exception("Unexpected error in get_ubpr_ratios")
         return f"Error fetching UBPR ratios: {exc}"
@@ -76,16 +61,13 @@ def get_peer_comparison(rssd_id: str, quarter_date: str, peer_group: str = "all"
     Args:
         rssd_id: Bank RSSD ID
         quarter_date: Quarter in YYYYMMDD format
-        peer_group: "all", "large" (>$100B), "mid" ($10B-$100B), "community" (<$10B), "small" (<$1B)
+        peer_group: "all", "large", "mid", "community", "small"
 
     Returns:
         Table of bank value vs peer average and difference for top 12 metrics.
     """
     try:
-        data = _get(
-            "/ubpr/peer-comparison",
-            {"rssd_id": rssd_id, "quarter_date": quarter_date, "peer_group": peer_group},
-        )
+        data = _svc().get_peer_comparison(rssd_id, quarter_date, peer_group)
         bank_vals = data.get("bank_ratios", {})
         peer_avgs = data.get("peer_averages", {})
         if not peer_avgs:
@@ -105,12 +87,6 @@ def get_peer_comparison(rssd_id: str, quarter_date: str, peer_group: str = "all"
             except (TypeError, ValueError):
                 pass
         return "\n".join(lines)
-    except requests.exceptions.Timeout:
-        logger.warning("Timeout fetching peer comparison for RSSD %s", rssd_id)
-        return f"Request timed out fetching peer comparison for RSSD {rssd_id}."
-    except requests.exceptions.HTTPError as exc:
-        logger.error("HTTP %s fetching peer comparison for RSSD %s", exc.response.status_code, rssd_id)
-        return f"Backend returned {exc.response.status_code} for peer comparison."
     except Exception as exc:
         logger.exception("Unexpected error in get_peer_comparison")
         return f"Error fetching peer comparison: {exc}"
@@ -131,30 +107,26 @@ def get_ubpr_trend(rssd_id: str, from_quarter: str, to_quarter: str, codes: str)
         Quarterly values for each requested metric across the date range.
     """
     try:
+        svc = _svc()
         code_list = [c.strip() for c in codes.split(",") if c.strip()]
-        data = _get(
-            "/ubpr/trend",
-            {
-                "rssd_id": rssd_id,
-                "from_quarter": from_quarter,
-                "to_quarter": to_quarter,
-                "codes": code_list,
-            },
-        )
-        if not data:
+        all_quarters = svc.get_available_quarters()
+        data = svc.get_trend_data(rssd_id, from_quarter, to_quarter, all_quarters, code_list)
+        trend = data.get("trend", [])
+        if not trend:
             return "No trend data available for the specified range."
+        by_code: dict = {}
+        for row in trend:
+            qd = row.get("quarter_date", "")
+            for code in code_list:
+                val = row.get(code)
+                if val is not None:
+                    by_code.setdefault(code, []).append((qd, val))
         lines = [f"UBPR Trend — RSSD {rssd_id} ({from_quarter} to {to_quarter}):"]
-        for code, points in data.items():
+        for code, points in by_code.items():
             lines.append(f"\n  {code}:")
-            for p in points:
-                lines.append(f"    {p.get('quarter', '')}: {p.get('value', 'N/A')}")
+            for qd, val in sorted(points, reverse=True):
+                lines.append(f"    {qd}: {val}")
         return "\n".join(lines)
-    except requests.exceptions.Timeout:
-        logger.warning("Timeout fetching UBPR trend for RSSD %s", rssd_id)
-        return f"Request timed out fetching trend data for RSSD {rssd_id}."
-    except requests.exceptions.HTTPError as exc:
-        logger.error("HTTP %s fetching UBPR trend for RSSD %s", exc.response.status_code, rssd_id)
-        return f"Backend returned {exc.response.status_code} for trend data."
     except Exception as exc:
         logger.exception("Unexpected error in get_ubpr_trend")
         return f"Error fetching UBPR trend: {exc}"
@@ -173,7 +145,7 @@ def flag_regulatory_issues(rssd_id: str, quarter_date: str) -> str:
         Regulatory status for each capital ratio with threshold comparisons.
     """
     try:
-        data = _get("/ubpr/ratios", {"rssd_id": rssd_id, "quarter_date": quarter_date})
+        data = _svc().get_key_ratios(rssd_id, quarter_date)
         ratios = data.get("ratios", {})
         lines = [f"Regulatory Status — RSSD {rssd_id} ({quarter_date}):"]
         found = False
@@ -197,12 +169,6 @@ def flag_regulatory_issues(rssd_id: str, quarter_date: str) -> str:
         if not found:
             lines.append("  No capital ratio data found for this bank/quarter.")
         return "\n".join(lines)
-    except requests.exceptions.Timeout:
-        logger.warning("Timeout fetching regulatory status for RSSD %s", rssd_id)
-        return f"Request timed out checking regulatory status for RSSD {rssd_id}."
-    except requests.exceptions.HTTPError as exc:
-        logger.error("HTTP %s fetching regulatory status for RSSD %s", exc.response.status_code, rssd_id)
-        return f"Backend returned {exc.response.status_code} for RSSD {rssd_id}."
     except Exception as exc:
         logger.exception("Unexpected error in flag_regulatory_issues")
         return f"Error checking regulatory status: {exc}"
