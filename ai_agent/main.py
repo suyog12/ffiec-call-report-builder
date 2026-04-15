@@ -47,15 +47,13 @@ def demo_llm_initialization():
     from langchain_google_genai import ChatGoogleGenerativeAI
     from langchain_core.messages import HumanMessage
 
-    # Initialize with default temperature
     llm_precise = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model="gemini-2.0-flash",
         google_api_key=GEMINI_API_KEY,
         temperature=0.0,
     )
-    # Initialize with higher temperature for more creative responses
     llm_creative = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model="gemini-2.0-flash",
         google_api_key=GEMINI_API_KEY,
         temperature=0.9,
     )
@@ -76,18 +74,31 @@ def demo_agent_creation():
     print("=" * 60)
     print("COMPONENT 2: Agent Creation")
     print("=" * 60)
-    from agents.ubpr_agent import create_ubpr_agent
-    from agents.call_report_agent import create_call_report_agent
 
-    print("Creating UBPR Financial Analysis Agent...")
-    ubpr_agent = create_ubpr_agent(temperature=0.1)
-    print("  UBPR Agent created - specialized in ratios, capital, peer comparison")
+    # Sub-agents are now direct-dispatch (no LLM); demonstrate by calling
+    # run_ubpr_agent and run_call_report_agent with a test context.
+    from agents.ubpr_agent import run_ubpr_agent
+    from agents.call_report_agent import run_call_report_agent
 
-    print("Creating Call Report Agent...")
-    cr_agent = create_call_report_agent(temperature=0.1)
-    print("  Call Report Agent created - specialized in filings, balance sheets, metrics\n")
+    print("UBPR Agent — direct tool dispatch (no LLM for in-scope queries)")
+    result = run_ubpr_agent(
+        question="What are the key ratios?",
+        rssd_id="480228",
+        bank_name="BANK OF AMERICA, NATIONAL ASSOCIATION",
+        quarter="20251231",
+        thread_id="agent-creation-demo-ubpr",
+    )
+    print(f"  Result preview: {str(result)[:200]}\n")
 
-    return ubpr_agent, cr_agent
+    print("Call Report Agent — direct tool dispatch (no LLM for in-scope queries)")
+    result = run_call_report_agent(
+        question="Show me key metrics",
+        rssd_id="480228",
+        bank_name="BANK OF AMERICA, NATIONAL ASSOCIATION",
+        period="12/31/2025",
+        thread_id="agent-creation-demo-cr",
+    )
+    print(f"  Result preview: {str(result)[:200]}\n")
 
 
 # COMPONENT 3: Message Handling (multi-turn)
@@ -99,12 +110,11 @@ def demo_message_handling():
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model="gemini-2.0-flash",
         google_api_key=GEMINI_API_KEY,
         temperature=0.1,
     )
 
-    # Component 3: Multi-turn message sequence
     messages: list[BaseMessage] = [
         HumanMessage(content="What is the CET1 capital ratio?"),
     ]
@@ -132,11 +142,19 @@ def demo_streaming():
     print("=" * 60)
     from agents.orchestrator import chat
 
-    print("Streaming response for: 'What is ROA and why does it matter for banks?'\n")
+    # Provide bank context so the question is genuinely ambiguous and reaches
+    # the Gemini orchestrator, which supports streaming.
+    question = "Tell me about the overall financial health of Bank of America."
+    print(f"Streaming response for: '{question}'\n")
     print("Stream: ", end="", flush=True)
 
     stream = chat(
-        question="What is Return on Assets (ROA) and why does it matter for bank performance evaluation?",
+        question=question,
+        rssd_id="480228",
+        bank_name="BANK OF AMERICA, NATIONAL ASSOCIATION",
+        quarter="20251231",
+        period="12/31/2025",
+        available_periods=[],
         thread_id="stream-demo",
         stream=True,
     )
@@ -239,12 +257,14 @@ def demo_orchestration():
     }
 
     queries = [
-        ("UBPR query → routes to UBPR Agent",
+        ("UBPR query → direct tool dispatch (no Gemini)",
          "What is Bank of America's capital adequacy ratio?"),
-        ("Call Report query → routes to Call Report Agent",
+        ("Call Report query → direct tool dispatch (no Gemini)",
          "What are Bank of America's total deposits from their Q4 2025 filing?"),
-        ("Out of scope → blocked by orchestrator",
+        ("Out of scope → blocked before any API call",
          "What is the weather in New York today?"),
+        ("Ambiguous query → Gemini orchestrator",
+         "Give me a full overview of this bank's financial position."),
     ]
 
     for label, question in queries:
@@ -256,11 +276,11 @@ def demo_orchestration():
         except Exception as e:
             msg = str(e)
             if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-                print("API rate limit reached. Quota resets at midnight Pacific Time.")
-                print("      The code is correct - this is a free-tier quota issue only.")
+                print("  API rate limit reached. Quota resets at midnight Pacific Time.")
+                print("  The code is correct - this is a free-tier quota issue only.")
                 break
             else:
-                print(f"Error: {msg[:200]}")
+                print(f"  Error: {msg[:200]}")
 
     print("\nOrchestrator correctly routed all queries\n")
 
@@ -338,7 +358,6 @@ def main():
     demo_tools()
     demo_memory()
     demo_orchestration()
-    # Streaming last as it's the most visual
     demo_streaming()
 
     print("=" * 60)

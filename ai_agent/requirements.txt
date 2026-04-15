@@ -8,4 +8,3 @@ python-dotenv
 fastapi
 uvicorn
 sseclient-py
-install langchain-core

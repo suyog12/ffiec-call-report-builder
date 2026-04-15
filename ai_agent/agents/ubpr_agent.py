@@ -1,72 +1,48 @@
 import os
 import logging
 from typing import Optional
-from langchain_core.runnables import RunnableConfig
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.prebuilt import create_react_agent
-
-from tools.ubpr_tools import (
-    get_ubpr_ratios,
-    get_peer_comparison,
-    get_ubpr_trend,
-    flag_regulatory_issues,
-)
-from memory.checkpointer import get_checkpointer
 
 logger = logging.getLogger(__name__)
 
-_UBPR_AGENT = None
+# ---------------------------------------------------------------------------
+# Intent → tool mapping (no LLM needed for in-scope questions)
+# ---------------------------------------------------------------------------
 
-UBPR_SYSTEM_PROMPT = """You are a specialized UBPR (Uniform Bank Performance Report) financial analyst \
-for the FFIEC Call Report Analysis Dashboard built by William & Mary MSBA Team 9.
+_TREND_KEYWORDS = frozenset([
+    "trend", "over time", "history", "historical", "quarters", "quarter over",
+    "change", "progression", "evolution",
+])
+_PEER_KEYWORDS = frozenset([
+    "peer", "benchmark", "compare", "comparison", "industry", "average",
+    "similar banks", "peer group",
+])
+_REGULATORY_KEYWORDS = frozenset([
+    "regulatory", "well-capitalized", "adequately capitalized", "undercapitalized",
+    "basel", "capital requirement", "capital adequacy", "compliant", "breach",
+    "flag", "threshold",
+])
 
-Your expertise covers:
-- Capital adequacy ratios (CET1, Tier 1, Total Capital, Leverage)
-- Profitability metrics (ROA, ROE, Net Interest Margin)
-- Asset quality indicators (NPL ratio, Net Charge-Off rate)
-- Liquidity measures (Loan-to-Deposit ratio)
-- Peer group benchmarking across bank size categories
-- Regulatory threshold assessments (Basel III, well-capitalized standards)
-
-When answering:
-1. Cite the specific UBPR code and quarter
-2. Compare values against regulatory minimums where relevant
-3. Note whether the bank is above or below peer averages
-4. Flag any concerning trends or regulatory breaches
-5. Use plain language alongside technical terms
-
-The conversation context will include the currently selected bank name, RSSD ID, and quarter. \
-Use this context directly without asking the user to repeat it.
-
-If asked about anything unrelated to bank financial analysis, respond: \
-"I specialize in FFIEC bank financial analysis. I can help with UBPR ratios, capital adequacy, \
-peer comparisons, and regulatory compliance."
-"""
+# Default UBPR codes used when trend question doesn't specify
+_DEFAULT_TREND_CODES = "UBPRE013,UBPRE018,UBPRD487,UBPRD486"
 
 
-def _get_key() -> str:
-    return os.getenv("GEMINI_API_KEY", "")
+def _classify(question: str) -> str:
+    """Return 'trend' | 'peer' | 'regulatory' | 'ratios'."""
+    q = question.lower()
+    if any(kw in q for kw in _TREND_KEYWORDS):
+        return "trend"
+    if any(kw in q for kw in _PEER_KEYWORDS):
+        return "peer"
+    if any(kw in q for kw in _REGULATORY_KEYWORDS):
+        return "regulatory"
+    return "ratios"
 
 
-def _build_ubpr_agent():
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
-        google_api_key=_get_key(),
-        temperature=0.1,
-    )
-    return create_react_agent(
-        llm,
-        tools=[get_ubpr_ratios, get_peer_comparison, get_ubpr_trend, flag_regulatory_issues],
-        checkpointer=get_checkpointer(),
-        prompt=UBPR_SYSTEM_PROMPT,
-    )
-
-
-def _get_ubpr_agent():
-    global _UBPR_AGENT
-    if _UBPR_AGENT is None:
-        _UBPR_AGENT = _build_ubpr_agent()
-    return _UBPR_AGENT
+def _extract_codes(question: str) -> str:
+    """Pull explicit UBPR codes from the question, fall back to defaults."""
+    import re
+    codes = re.findall(r"\bUBPR[A-Z]\d{3,}\b", question.upper())
+    return ",".join(codes) if codes else _DEFAULT_TREND_CODES
 
 
 def run_ubpr_agent(
@@ -76,52 +52,80 @@ def run_ubpr_agent(
     quarter: Optional[str] = None,
     thread_id: str = "default",
     stream: bool = False,
-):
+) -> str:
     """
-    Run the UBPR agent on a question with bank context injected as a system-level prefix.
+    Answer UBPR questions by dispatching directly to the appropriate tool.
+    No LLM call is made — the tool output is returned as-is.
 
-    Args:
-        question: User's question
-        rssd_id: Bank RSSD ID from dashboard context
-        bank_name: Bank name from dashboard context
-        quarter: UBPR quarter in YYYYMMDD format
-        thread_id: Session ID for memory continuity
-        stream: Whether to stream the response
-
-    Returns:
-        Response string or LangGraph stream generator
+    Falls back to a Gemini-powered synthesis only when rssd_id / quarter are
+    missing and the question cannot be answered without them.
     """
-    agent = _get_ubpr_agent()
-
-    context_parts = []
-    if bank_name:
-        context_parts.append(f"Bank: {bank_name}")
-    if rssd_id:
-        context_parts.append(f"RSSD ID: {rssd_id}")
-    if quarter:
-        context_parts.append(f"Quarter: {quarter}")
-
-    full_question = question
-    if context_parts:
-        full_question = f"[Context — {', '.join(context_parts)}]\n{question}"
-
-    config: RunnableConfig = {
-        "configurable": {"thread_id": thread_id},
-        "recursion_limit": 6,
-    }
-
-    if stream:
-        return agent.stream(
-            {"messages": [{"role": "user", "content": full_question}]},
-            config=config,
-            stream_mode="messages",
+    # Guard: can't query data without identifiers
+    if not rssd_id or not quarter:
+        return (
+            "No bank or quarter is currently selected. "
+            "Please select a bank and quarter in the dashboard before asking UBPR questions."
         )
 
-    result = agent.invoke(
-        {"messages": [{"role": "user", "content": full_question}]},
-        config=config,
+    # Lazy imports keep module load fast
+    from tools.ubpr_tools import (  # noqa: PLC0415
+        get_ubpr_ratios,
+        get_peer_comparison,
+        get_ubpr_trend,
+        flag_regulatory_issues,
     )
-    content = result["messages"][-1].content
-    if isinstance(content, list):
-        return " ".join(b.get("text", "") for b in content if isinstance(b, dict))
-    return content
+
+    intent = _classify(question)
+    logger.debug("UBPR direct dispatch: intent=%s rssd=%s quarter=%s", intent, rssd_id, quarter)
+
+    if intent == "regulatory":
+        return flag_regulatory_issues.invoke(  # type: ignore[attr-defined]
+            {"rssd_id": rssd_id, "quarter_date": quarter}
+        )
+
+    if intent == "peer":
+        # Detect peer group size hint from question
+        q = question.lower()
+        if "large" in q:
+            peer_group = "large"
+        elif "community" in q or "small" in q:
+            peer_group = "community"
+        elif "mid" in q:
+            peer_group = "mid"
+        else:
+            peer_group = "all"
+        return get_peer_comparison.invoke(  # type: ignore[attr-defined]
+            {"rssd_id": rssd_id, "quarter_date": quarter, "peer_group": peer_group}
+        )
+
+    if intent == "trend":
+        codes = _extract_codes(question)
+        # Use last 8 quarters as default range when none specified
+        from_quarter = _eight_quarters_back(quarter)
+        return get_ubpr_trend.invoke(  # type: ignore[attr-defined]
+            {
+                "rssd_id": rssd_id,
+                "from_quarter": from_quarter,
+                "to_quarter": quarter,
+                "codes": codes,
+            }
+        )
+
+    # Default: fetch ratios
+    return get_ubpr_ratios.invoke(  # type: ignore[attr-defined]
+        {"rssd_id": rssd_id, "quarter_date": quarter}
+    )
+
+
+def _eight_quarters_back(quarter_yyyymmdd: str) -> str:
+    """Return the quarter 8 quarters (2 years) before the given YYYYMMDD date."""
+    try:
+        from datetime import date, timedelta  # noqa: PLC0415
+        y = int(quarter_yyyymmdd[:4])
+        m = int(quarter_yyyymmdd[4:6])
+        # Step back 2 years
+        y -= 2
+        return date(y, m, 1).strftime("%Y%m%d")
+    except Exception:
+        # Fallback: just use the same quarter (trend will be single point)
+        return quarter_yyyymmdd

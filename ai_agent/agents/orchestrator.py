@@ -19,6 +19,10 @@ _ORCHESTRATOR_AGENT = None
 _request_count = 0
 _MONTHLY_REQUEST_LIMIT = 14_000
 
+# ---------------------------------------------------------------------------
+# Keyword sets for routing (no LLM needed for clear-cut questions)
+# ---------------------------------------------------------------------------
+
 _UBPR_KEYWORDS = frozenset([
     "ratio", "roa", "roe", "nim", "net interest margin", "return on",
     "capital", "cet1", "tier 1", "tier1", "leverage", "peer", "benchmark",
@@ -31,8 +35,22 @@ _CALL_REPORT_KEYWORDS = frozenset([
     "balance sheet", "income statement", "schedule rc", "schedule ri",
     "schedule rc-c", "total assets", "total deposits", "total loans",
     "net income", "equity", "filing", "call report", "period", "report",
-    "load", "view", "show", "open", "facsimile", "pdf",
+    "load", "view", "open", "facsimile", "pdf",   # "show" removed
 ])
+
+# Questions that are clearly not bank-financial analysis — answer inline without Gemini
+_OUT_OF_SCOPE_KEYWORDS = frozenset([
+    "weather", "recipe", "sports", "movie", "music", "song", "joke",
+    "news", "politics", "travel", "hotel", "flight", "stock price",
+    "crypto", "bitcoin", "coding", "python", "javascript", "write an essay",
+    "write a poem", "translate", "who are you", "what are you",
+])
+
+_OUT_OF_SCOPE_REPLY = (
+    "I am specialized in FFIEC bank financial analysis and cannot help with that. "
+    "I can answer questions about Call Report filings, UBPR financial ratios, "
+    "peer group benchmarking, and regulatory capital adequacy."
+)
 
 _SESSION_CONTEXT: dict = {
     "rssd_id": None,
@@ -43,6 +61,7 @@ _SESSION_CONTEXT: dict = {
     "thread_id": "default",
 }
 
+# The orchestrator LLM prompt — only reached for genuinely ambiguous questions
 ORCHESTRATOR_SYSTEM_PROMPT = (
     "You are the master orchestrator for the FFIEC Call Report Analysis Dashboard "
     "built by William & Mary MSBA Team 9, Class of 2026.\n\n"
@@ -70,14 +89,19 @@ def _get_key() -> str:
 
 def _route_by_keyword(question: str) -> Optional[str]:
     """
-    Classify the question as 'ubpr', 'call_report', or None using keyword matching.
-    Returns None when the question is ambiguous and requires LLM routing.
+    Classify the question as 'ubpr', 'call_report', 'out_of_scope', or None.
+    Returns None only when the question is genuinely ambiguous (needs LLM routing).
     """
     q = question.lower()
+
+    # Fast out-of-scope check — no Gemini call needed
+    if any(kw in q for kw in _OUT_OF_SCOPE_KEYWORDS):
+        return "out_of_scope"
+
     ubpr_score = sum(1 for kw in _UBPR_KEYWORDS if kw in q)
     call_score = sum(1 for kw in _CALL_REPORT_KEYWORDS if kw in q)
     if ubpr_score == call_score:
-        return None
+        return None  # Ambiguous → fall through to orchestrator (Gemini)
     return "ubpr" if ubpr_score > call_score else "call_report"
 
 
@@ -131,6 +155,11 @@ def analyze_call_report(question: str) -> str:
 
 
 def _build_orchestrator():
+    """
+    The orchestrator LLM agent — only instantiated and called for ambiguous queries.
+    Its tools (analyze_financial_performance, analyze_call_report) now dispatch
+    to LLM-free sub-agents, so Gemini only does routing + synthesis here.
+    """
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.0-flash",
         google_api_key=_get_key(),
@@ -228,24 +257,16 @@ def chat(
     stream: bool = False,
 ) -> Any:
     """
-    Main entry point for the chat interface.
+    Main entry point.
 
-    Routes directly to the appropriate sub-agent via keyword matching when unambiguous,
-    falling back to the LLM orchestrator for ambiguous queries. Both paths use the same
-    singleton agents and shared MemorySaver checkpointer.
+    Routing logic (in order):
+      1. Out-of-scope keywords   → return canned reply, no API call
+      2. Clear UBPR keywords     → run_ubpr_agent() directly, no Gemini
+      3. Clear Call Report kws   → run_call_report_agent() directly, no Gemini
+      4. Ambiguous (score tie)   → Gemini orchestrator (Gemini IS called here)
 
-    Args:
-        question: User's question
-        rssd_id: Currently loaded bank RSSD ID
-        bank_name: Currently loaded bank name
-        quarter: UBPR quarter in YYYYMMDD format
-        period: Call Report period in MM/DD/YYYY format
-        available_periods: All available Call Report periods
-        thread_id: Session thread ID for memory
-        stream: Whether to stream the response
-
-    Returns:
-        Response string or LangGraph stream generator
+    Gemini is only invoked in case 4, and only for the routing + synthesis step.
+    The tool functions the orchestrator calls also resolve without a second LLM call.
     """
     limit_msg = _check_rate_limit()
     if limit_msg:
@@ -262,9 +283,15 @@ def chat(
 
     route = _route_by_keyword(question)
 
+    # ── 1. Out of scope ────────────────────────────────────────────────────
+    if route == "out_of_scope":
+        logger.debug("Keyword router: out-of-scope, no API call")
+        return _OUT_OF_SCOPE_REPLY
+
+    # ── 2. Clear UBPR path ─────────────────────────────────────────────────
     if route == "ubpr":
         from agents.ubpr_agent import run_ubpr_agent as _run_ubpr  # noqa: PLC0415
-        logger.debug("Keyword router: UBPR path for thread %s", thread_id)
+        logger.debug("Keyword router: UBPR direct dispatch (no Gemini) for thread %s", thread_id)
         try:
             return _run_ubpr(
                 question=question,
@@ -277,9 +304,10 @@ def chat(
         except Exception as exc:
             return _handle_llm_error(exc)
 
+    # ── 3. Clear Call Report path ──────────────────────────────────────────
     if route == "call_report":
         from agents.call_report_agent import run_call_report_agent as _run_cr  # noqa: PLC0415
-        logger.debug("Keyword router: Call Report path for thread %s", thread_id)
+        logger.debug("Keyword router: Call Report direct dispatch (no Gemini) for thread %s", thread_id)
         try:
             return _run_cr(
                 question=question,
@@ -293,7 +321,8 @@ def chat(
         except Exception as exc:
             return _handle_llm_error(exc)
 
-    logger.debug("Keyword router: ambiguous, falling back to orchestrator for thread %s", thread_id)
+    # ── 4. Ambiguous → Gemini orchestrator ────────────────────────────────
+    logger.debug("Keyword router: ambiguous → Gemini orchestrator for thread %s", thread_id)
     agent = _get_orchestrator()
     user_message = _build_user_message(question, rssd_id, bank_name, quarter, period)
     config: RunnableConfig = {
